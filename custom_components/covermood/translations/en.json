@@ -1,0 +1,114 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Welcome to Covermood",
+        "description": "Covermood colors the lights of a room to match the cover art of the music playing, with a smooth gradient across all bulbs. It works with every music service that provides cover art in Home Assistant.\n\nNext we set up the first room. You can add more rooms later on the integration page."
+      },
+      "room": {
+        "title": "Room",
+        "description": "Pick an area from Home Assistant. Its media players and lights are suggested in the next step. Without an area, just enter a name.",
+        "data": { "area": "Area", "name": "Name" },
+        "data_description": { "name": "Leave empty to use the area name." }
+      },
+      "devices": {
+        "title": "Players and lights",
+        "description": "As soon as one of these players is playing, Covermood colors the lights. With several players, the first one currently playing wins.",
+        "data": { "players": "Media players", "lights": "Lights" },
+        "data_description": { "lights": "The order you select them in is the direction of the gradient, e.g. left to right. Only lights that support color are offered." }
+      },
+      "look": {
+        "title": "Mood",
+        "description": "You can change everything here later. Switch the mood any time with the room's select entity.",
+        "data": {
+          "mode": "Mood",
+          "source": "Colors from the cover",
+          "points": "Number of color points",
+          "turn_on": "Turn on lights that are off",
+          "brightness": "Brightness when turned on",
+          "restore": "Restore lights afterwards"
+        },
+        "data_description": {
+          "points": "How many colors are read from the cover. Covermood blends a gradient between them.",
+          "turn_on": "Lights that are off when the music starts are turned on. Afterwards Covermood never turns anything on.",
+          "restore": "When the music ends (after a short wait to cover pauses), the lights return to their previous state."
+        }
+      }
+    },
+    "error": {
+      "name_required": "Pick an area or enter a name.",
+      "no_players": "Pick at least one media player.",
+      "no_lights": "Pick at least one light."
+    }
+  },
+  "config_subentries": {
+    "room": {
+      "entry_type": "Room",
+      "initiate_flow": { "user": "Add room", "reconfigure": "Edit room" },
+      "step": {
+        "room": {
+          "title": "Room",
+          "description": "Pick an area from Home Assistant. Its media players and lights are suggested in the next step. Without an area, just enter a name.",
+          "data": { "area": "Area", "name": "Name" },
+          "data_description": { "name": "Leave empty to use the area name." }
+        },
+        "devices": {
+          "title": "Players and lights",
+          "description": "As soon as one of these players is playing, Covermood colors the lights. With several players, the first one currently playing wins.",
+          "data": { "players": "Media players", "lights": "Lights" },
+          "data_description": { "lights": "The order you select them in is the direction of the gradient, e.g. left to right. Only lights that support color are offered." }
+        },
+        "look": {
+          "title": "Mood",
+          "description": "You can change everything here later. Switch the mood any time with the room's select entity.",
+          "data": {
+            "mode": "Mood",
+            "source": "Colors from the cover",
+            "points": "Number of color points",
+            "turn_on": "Turn on lights that are off",
+            "brightness": "Brightness when turned on",
+            "restore": "Restore lights afterwards"
+          },
+          "data_description": {
+            "points": "How many colors are read from the cover. Covermood blends a gradient between them.",
+            "turn_on": "Lights that are off when the music starts are turned on. Afterwards Covermood never turns anything on.",
+            "restore": "When the music ends (after a short wait to cover pauses), the lights return to their previous state."
+          }
+        }
+      },
+      "error": {
+        "name_required": "Pick an area or enter a name.",
+        "no_players": "Pick at least one media player.",
+        "no_lights": "Pick at least one light."
+      },
+      "abort": { "reconfigure_successful": "Room saved." }
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "calm": "Calm – colors drift slowly",
+        "static": "Static – colors stand still",
+        "party": "Party – colors drift fast"
+      }
+    },
+    "source": {
+      "options": {
+        "palette": "Dominant hues of the cover",
+        "zones": "Image zones from left to right",
+        "regions": "Custom regions – set per light in the “Covermood” editor"
+      }
+    }
+  },
+  "entity": {
+    "switch": { "enabled": { "name": "Active" } },
+    "select": {
+      "mode": {
+        "name": "Mood",
+        "state": { "calm": "Calm", "static": "Static", "party": "Party" }
+      }
+    },
+    "sensor": { "palette": { "name": "Color palette" } },
+    "binary_sensor": { "active": { "name": "Coloring lights" } }
+  }
+}

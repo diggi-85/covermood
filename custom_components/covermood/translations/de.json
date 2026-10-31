@@ -1,0 +1,114 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Willkommen bei Covermood",
+        "description": "Covermood färbt die Lichter eines Raums passend zum Cover der laufenden Musik – mit sanftem Farbverlauf über alle Leuchtmittel. Das klappt mit jedem Musikdienst, der in Home Assistant ein Cover liefert.\n\nAls Nächstes richten wir den ersten Raum ein. Weitere Räume fügst du später auf der Integrationsseite hinzu."
+      },
+      "room": {
+        "title": "Raum",
+        "description": "Wähle einen Bereich aus Home Assistant. Medienplayer und Lichter des Bereichs werden im nächsten Schritt vorgeschlagen. Ohne Bereich gib einfach einen Namen ein.",
+        "data": { "area": "Bereich", "name": "Name" },
+        "data_description": { "name": "Leer lassen, um den Namen des Bereichs zu verwenden." }
+      },
+      "devices": {
+        "title": "Player und Lichter",
+        "description": "Sobald einer dieser Player spielt, färbt Covermood die Lichter. Bei mehreren Playern gilt der erste, der gerade spielt.",
+        "data": { "players": "Medienplayer", "lights": "Leuchtmittel" },
+        "data_description": { "lights": "Die Reihenfolge der Auswahl ist die Richtung des Farbverlaufs, z. B. von links nach rechts. Es werden nur Lichter angeboten, die Farbe können." }
+      },
+      "look": {
+        "title": "Stimmung",
+        "description": "Alles hier lässt sich später ändern. Die Stimmung wechselst du jederzeit über die Auswahl des Raums.",
+        "data": {
+          "mode": "Stimmung",
+          "source": "Farben aus dem Cover",
+          "points": "Anzahl Farbpunkte",
+          "turn_on": "Ausgeschaltete Lichter einschalten",
+          "brightness": "Helligkeit beim Einschalten",
+          "restore": "Lichter danach zurücksetzen"
+        },
+        "data_description": {
+          "points": "Wie viele Farben aus dem Cover gelesen werden. Dazwischen mischt Covermood einen Verlauf.",
+          "turn_on": "Lichter, die beim Start der Musik aus sind, gehen an. Danach schaltet Covermood nichts mehr ein.",
+          "restore": "Nach dem Ende der Musik (und kurzer Wartezeit gegen Pausen) kehren die Lichter in ihren früheren Zustand zurück."
+        }
+      }
+    },
+    "error": {
+      "name_required": "Wähle einen Bereich oder gib einen Namen ein.",
+      "no_players": "Wähle mindestens einen Medienplayer.",
+      "no_lights": "Wähle mindestens ein Licht."
+    }
+  },
+  "config_subentries": {
+    "room": {
+      "entry_type": "Raum",
+      "initiate_flow": { "user": "Raum hinzufügen", "reconfigure": "Raum ändern" },
+      "step": {
+        "room": {
+          "title": "Raum",
+          "description": "Wähle einen Bereich aus Home Assistant. Medienplayer und Lichter des Bereichs werden im nächsten Schritt vorgeschlagen. Ohne Bereich gib einfach einen Namen ein.",
+          "data": { "area": "Bereich", "name": "Name" },
+          "data_description": { "name": "Leer lassen, um den Namen des Bereichs zu verwenden." }
+        },
+        "devices": {
+          "title": "Player und Lichter",
+          "description": "Sobald einer dieser Player spielt, färbt Covermood die Lichter. Bei mehreren Playern gilt der erste, der gerade spielt.",
+          "data": { "players": "Medienplayer", "lights": "Leuchtmittel" },
+          "data_description": { "lights": "Die Reihenfolge der Auswahl ist die Richtung des Farbverlaufs, z. B. von links nach rechts. Es werden nur Lichter angeboten, die Farbe können." }
+        },
+        "look": {
+          "title": "Stimmung",
+          "description": "Alles hier lässt sich später ändern. Die Stimmung wechselst du jederzeit über die Auswahl des Raums.",
+          "data": {
+            "mode": "Stimmung",
+            "source": "Farben aus dem Cover",
+            "points": "Anzahl Farbpunkte",
+            "turn_on": "Ausgeschaltete Lichter einschalten",
+            "brightness": "Helligkeit beim Einschalten",
+            "restore": "Lichter danach zurücksetzen"
+          },
+          "data_description": {
+            "points": "Wie viele Farben aus dem Cover gelesen werden. Dazwischen mischt Covermood einen Verlauf.",
+            "turn_on": "Lichter, die beim Start der Musik aus sind, gehen an. Danach schaltet Covermood nichts mehr ein.",
+            "restore": "Nach dem Ende der Musik (und kurzer Wartezeit gegen Pausen) kehren die Lichter in ihren früheren Zustand zurück."
+          }
+        }
+      },
+      "error": {
+        "name_required": "Wähle einen Bereich oder gib einen Namen ein.",
+        "no_players": "Wähle mindestens einen Medienplayer.",
+        "no_lights": "Wähle mindestens ein Licht."
+      },
+      "abort": { "reconfigure_successful": "Raum gespeichert." }
+    }
+  },
+  "selector": {
+    "mode": {
+      "options": {
+        "calm": "Ruhig – die Farben wandern langsam",
+        "static": "Statisch – die Farben stehen still",
+        "party": "Party – die Farben wandern schnell"
+      }
+    },
+    "source": {
+      "options": {
+        "palette": "Prägende Farbtöne des Covers",
+        "zones": "Bildzonen von links nach rechts",
+        "regions": "Eigene Bereiche – pro Licht im Editor „Covermood“ festlegen"
+      }
+    }
+  },
+  "entity": {
+    "switch": { "enabled": { "name": "Aktiv" } },
+    "select": {
+      "mode": {
+        "name": "Stimmung",
+        "state": { "calm": "Ruhig", "static": "Statisch", "party": "Party" }
+      }
+    },
+    "sensor": { "palette": { "name": "Farbpalette" } },
+    "binary_sensor": { "active": { "name": "Färbt Lichter" } }
+  }
+}
