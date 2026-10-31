@@ -88,8 +88,9 @@ die Lichter folgen, ohne dass etwas neu lädt.
 |---|---|
 | **Lichter und Stellen im Cover** | Woher die Farben kommen: *Automatisch* (prägende Farben), *Zonen* (von links nach rechts, wie ein Ambilight) oder *Eigene Punkte*. Bei eigenen Punkten hat jedes Licht eine Karte mit **Hauptpunkt** und **Ersatzpunkten**; die Rechtecke verschiebst du auf dem Cover und änderst die Größe am Quadrat unten rechts. Ein ✓ zeigt, welcher Punkt gerade zählt. |
 | **Farbe** | Stil (*Lebendig, Pastell, Originalgetreu, Intensiv*), Mindestsättigung und Helligkeit der Lichter: *Nicht ändern*, *Fester Wert* oder *Folgt dem Cover* (zwischen Minimum und Maximum – nie dunkler als das Minimum). |
-| **Bewegung** | Stimmung (*Ruhig, Statisch, Party*), Überblendzeit bei neuem Cover, wie oft die Farben wandern. Eigene Punkte wandern nicht – jedes Licht behält seine Stelle. |
+| **Bewegung** | Stimmung (*Ruhig, Statisch, Party*), Überblendzeit bei neuem Cover, wie oft die Farben wandern. Eigene Punkte behalten standardmäßig ihre Stelle; auf Wunsch **wandern sie reihum über die Lampen** (jede Lampe läuft langsam über die Farben der anderen). |
 | **Wann und wie** | Nur bei bestimmten Quellen (z. B. nur Spotify, nicht der Fernseher), nur solange eine Entität an ist, ausgeschaltete Lichter einschalten, danach zurücksetzen oder am Ende stattdessen eine **Standardfarbe** setzen. |
+| **An/Aus-Schalter** | Neben der Raumauswahl: schaltet Covermood für den Raum an oder aus – dasselbe wie der `switch` des Raums. |
 | **Auf Lichtern testen** | Legt die aktuellen Einstellungen 10 Sekunden auf deine echten Lichter und stellt sie danach wieder her – oder die Musikfarben, wenn Musik läuft. |
 
 Das Cover kommt vom Player des Raums – auch wenn er pausiert oder im Leerlauf ist, solange er ein Bild liefert.

@@ -28,6 +28,7 @@ from .const import (
     CONF_BRI_MODE,
     CONF_BRIGHTNESS,
     CONF_DEFAULT_COLOR,
+    CONF_DRIFT_POINTS,
     CONF_EVERY,
     CONF_FADE,
     CONF_LIGHTS,
@@ -120,8 +121,8 @@ class RoomController:
         return self._mode(cfg).every if cfg[CONF_EVERY] is None else cfg[CONF_EVERY]
 
     def _drifts(self, cfg: dict[str, Any]) -> bool:
-        """Wandern die Farben? Eigene Bereiche gehören fest zu ihrem Licht."""
-        return self._every(cfg) > 0 and cfg[CONF_SOURCE] != SOURCE_REGIONS
+        """Wandern die Farben? Eigene Punkte gehören fest zu ihrem Licht – außer der Benutzer lässt sie wandern."""
+        return self._every(cfg) > 0 and (cfg[CONF_SOURCE] != SOURCE_REGIONS or cfg[CONF_DRIFT_POINTS])
 
     def rect_lists(self, cfg: dict[str, Any] | None = None) -> list[list[Rect]]:
         """Bereiche je Licht (Hauptpunkt zuerst); ohne eigene Wahl ein senkrechter Streifen in Lichter-Reihenfolge."""
@@ -243,6 +244,7 @@ class RoomController:
         """Was der Editor als „läuft gerade“ zeigt."""
         st = self._playing()
         return {
+            "enabled": self.enabled,
             "playing": st is not None,
             "player": st.entity_id if st else None,
             "title": st.attributes.get("media_title") if st else None,
@@ -354,6 +356,8 @@ class RoomController:
 
         if cfg[CONF_SOURCE] == SOURCE_REGIONS:
             colors = [finish(p.color) if p.color else None for p in picks]
+            if self._drifts(cfg) and (ring := [c for c in colors if c]):  # jede Lampe läuft reihum über alle Farben
+                colors = spread(ring, len(self.lights), offset, cyclic=True)
         elif picks:
             colors = spread([finish(p.color) for p in picks if p.color], len(self.lights), offset, self._drifts(cfg))
         else:

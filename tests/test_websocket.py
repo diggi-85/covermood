@@ -114,3 +114,18 @@ async def test_subscription_pushes_a_new_cover(hass, hass_ws_client, room):
 
     controller._notify()  # ohne neues Cover geht das Bild nicht noch einmal über die Leitung
     assert "image" not in (await ws.receive_json())["event"]
+
+
+async def test_editor_can_switch_a_room_off_and_on(hass, hass_ws_client, room):
+    _, controller = room
+    ws = await hass_ws_client(hass)
+    await ws.send_json_auto_id({"type": "covermood/rooms"})
+    assert (await ws.receive_json())["result"]["rooms"][0]["enabled"] is True
+
+    await ws.send_json_auto_id({"type": "covermood/enable", "room_id": controller.id, "enabled": False})
+    assert (await ws.receive_json())["success"]
+    assert controller.enabled is False and controller.now_playing()["enabled"] is False
+
+    await ws.send_json_auto_id({"type": "covermood/enable", "room_id": controller.id, "enabled": True})
+    assert (await ws.receive_json())["success"]
+    assert controller.enabled is True

@@ -1,13 +1,15 @@
 // Covermood-Editor: Stellen im Cover je Licht, Farbstil, Bewegung, Einschränkungen. Ohne Build, ohne Abhängigkeiten.
 // Jede Änderung wirkt sofort auf die Vorschau und – nach kurzer Pause – auf die Lichter; gespeichert wird von selbst.
 const MIN = 0.03;
-const STRUCTURAL = ["source", "mode", "style", "bri_mode", "default_color"]; // ändern, was zu sehen ist – sonst genügt der Wert
+const STRUCTURAL = ["source", "mode", "style", "bri_mode", "default_color", "drift_points"]; // ändern, was zu sehen ist – sonst genügt der Wert
 const HUES = [200, 35, 140, 330, 60, 270, 10, 170, 100, 300, 230, 80];
 const GATE_DOMAINS = ["input_boolean", "switch", "binary_sensor", "light"];
 const T = {
   de: {
     room: "Raum",
     idle: "Nichts spielt – gezeigt wird das letzte Cover.",
+    power: "Aktiv",
+    off: "Covermood ist für diesen Raum aus – die Lichter bleiben unberührt.",
     nocover: "Noch kein Cover. Starte Musik in diesem Raum – sobald ein Titel ein Cover hat, erscheint es hier und wechselt mit jedem Titel.",
     norooms: "Es ist noch kein Raum eingerichtet.",
     hint: "Ziehe jedes Rechteck auf die Stelle, deren Farbe das Licht bekommen soll; das Quadrat unten rechts ändert die Größe. Ersatzpunkte (gestrichelt) greifen, wenn der Hauptpunkt gerade schwarz ist.",
@@ -44,7 +46,8 @@ const T = {
     fade: "Überblendzeit bei neuem Cover",
     every: "Farben wandern alle",
     still: "stehen still",
-    wanderOff: "Eigene Punkte wandern nicht – jedes Licht behält seine Stelle.",
+    drift: "Eigene Punkte wandern lassen",
+    driftHint: "Jede Lampe läuft dann reihum über die Farben der anderen Lampen. Aus: jede Lampe behält ihre Stelle.",
     limits: "Wann und wie",
     onlySources: "Nur bei diesen Quellen",
     anySource: "Jede Quelle",
@@ -63,6 +66,8 @@ const T = {
   en: {
     room: "Room",
     idle: "Nothing is playing – showing the last cover.",
+    power: "Active",
+    off: "Covermood is off for this room – the lights are left alone.",
     nocover: "No cover yet. Play music in this room – once a track has cover art it shows up here and changes with every track.",
     norooms: "No room is set up yet.",
     hint: "Drag each rectangle to the spot whose color the light should get; the square at the bottom right resizes it. Backup spots (dashed) take over when the main spot is currently black.",
@@ -99,7 +104,8 @@ const T = {
     fade: "Fade time on a new cover",
     every: "Colors drift every",
     still: "stand still",
-    wanderOff: "Own points don't drift – each light keeps its spot.",
+    drift: "Let own points drift",
+    driftHint: "Each lamp then moves around through the colors of the other lamps. Off: each lamp keeps its spot.",
     limits: "When and how",
     onlySources: "Only for these sources",
     anySource: "Any source",
@@ -143,6 +149,7 @@ class CovermoodPanel extends HTMLElement {
     this._sel = 0; // gewähltes Licht
     this._image = null;
     this._now = {};
+    this._enabled = true; // ist Covermood für den gewählten Raum an?
     this._res = [];
     this._unsub = null;
     this._token = 0;
@@ -192,6 +199,7 @@ class CovermoodPanel extends HTMLElement {
     this._unsubscribe();
     const room = this.room;
     this._s = room ? structuredClone(room.settings) : null;
+    this._enabled = room?.enabled ?? true;
     if (this._s) {
       const m = this._data.modes[this._s.mode];
       this._s.fade ??= m.fade; // die Stimmung liefert, was nicht überschrieben ist
@@ -223,6 +231,7 @@ class CovermoodPanel extends HTMLElement {
 
   _onEvent(ev) {
     this._now = ev;
+    if ("enabled" in ev) this._enabled = ev.enabled;
     if ("image" in ev && ev.image !== this._image) {
       const hadImage = !!this._image;
       this._image = ev.image;
@@ -238,7 +247,11 @@ class CovermoodPanel extends HTMLElement {
     const el = this.shadowRoot.querySelector(".now");
     if (!el) return;
     const n = this._now;
-    el.innerHTML = n.playing
+    const power = this.shadowRoot.querySelector("#power");
+    if (power) power.checked = this._enabled;
+    el.innerHTML = !this._enabled
+      ? `<span>${this.t.off}</span>`
+      : n.playing
       ? `<i class="dot"></i>${esc(n.title || "")}${n.artist ? ` <span>– ${esc(n.artist)}</span>` : ""}`
       : `<span>${this.t.idle}</span>`;
   }
@@ -269,6 +282,7 @@ class CovermoodPanel extends HTMLElement {
           <select id="room" aria-label="${t.room}">${rooms
             .map((r, i) => `<option value="${i}"${i === this._i ? " selected" : ""}>${esc(r.name)}</option>`)
             .join("")}</select>
+          <label class="power"><input type="checkbox" id="power" role="switch"${this._enabled ? " checked" : ""}> ${t.power}</label>
           <div class="now" aria-live="polite"></div>
           <span id="msg" role="status"></span>
         </header>
@@ -350,12 +364,13 @@ class CovermoodPanel extends HTMLElement {
 
   _secMotion() {
     const t = this.t, s = this._s;
-    const still = s.source === "regions";
+    const own = s.source === "regions";
+    const still = own && !s.drift_points; // eigene Punkte stehen fest, solange sie nicht wandern dürfen
     return `<details data-sec="motion"${this._open.motion ? " open" : ""}><summary>${t.motion}</summary>
       <div class="field"><span>${t.mode}</span>${this._seg("mode", t.modes, s.mode)}</div>
       ${this._slider("fade", t.fade, 0, 30, 0.5)}
-      ${this._slider("every", t.every, 0, 120, 1, still)}
-      ${still ? `<small class="note">${t.wanderOff}</small>` : ""}</details>`;
+      ${own ? `${this._check("drift_points", t.drift)}<small class="note">${t.driftHint}</small>` : ""}
+      ${this._slider("every", t.every, 0, 120, 1, still)}</details>`;
   }
 
   _secLimits() {
@@ -429,6 +444,7 @@ class CovermoodPanel extends HTMLElement {
   _onInput(e, committed = false) {
     const el = e.target;
     if (el.id === "room") return committed && this._select(+el.value);
+    if (el.id === "power") return committed && this._enable(el.checked);
     if (el.dataset.src !== undefined) {
       if (!committed) return;
       const rest = this._s.only_sources.filter((n) => n !== el.dataset.src);
@@ -450,6 +466,18 @@ class CovermoodPanel extends HTMLElement {
     if (live) this.shadowRoot.querySelector(`[data-v="${k}"]`).textContent = this._fmt(k, value);
     else if (!keep && STRUCTURAL.includes(k)) this._draw();
     this._changed();
+  }
+
+  async _enable(on) {
+    this._enabled = on;
+    this._paintNow();
+    try {
+      await this._hass.callWS({ type: "covermood/enable", room_id: this.room.id, enabled: on });
+    } catch (err) {
+      this._enabled = !on; // hat nicht geklappt: Schalter zurück
+      this._paintNow();
+      this._say(`${this.t.fail}: ${err.message || err.code || err}`);
+    }
   }
 
   _choose(l) {
@@ -577,6 +605,13 @@ const CSS = `
   .dot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: #4caf50; animation: pulse 1.6s ease-in-out infinite; }
   @keyframes pulse { 50% { opacity: .35; } }
   @media (prefers-reduced-motion: reduce) { .dot { animation: none; } .bulb { transition: none; } }
+  .power { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .power input { appearance: none; -webkit-appearance: none; position: relative; width: 38px; height: 22px; margin: 0; border-radius: 11px; cursor: pointer;
+    background: var(--divider-color); transition: background .2s; }
+  .power input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  .power input:checked { background: var(--primary-color); }
+  .power input:checked::after { transform: translateX(16px); }
+  @media (prefers-reduced-motion: reduce) { .power input, .power input::after { transition: none; } }
   #msg { color: var(--secondary-text-color); min-height: 1.2em; }
   .grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr); gap: 24px; align-items: start; }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }

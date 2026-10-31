@@ -223,3 +223,31 @@ async def test_editor_settings_reach_a_running_room_without_reload(hass):
     await room.async_configure({"only_sources": ["Radio"]}, persist=False)  # Quelle passt nicht mehr
     assert room.active and room._unsub_grace  # der Titel passt nicht mehr: Schonfrist läuft, Lichter bleiben so lange
     await room.async_stop()
+
+
+async def test_own_points_can_drift_round_the_lamps(hass):
+    regions = {"light.a": [[0, 0, 0.5, 1]], "light.b": [[0.5, 0, 0.5, 1]]}
+    row = [(230, 30, 30, 255)] * 32 + [(30, 30, 230, 255)] * 32  # links rot, rechts blau
+    on = async_mock_service(hass, "light", "turn_on")
+    for svc in ("create", "turn_on", "delete"):
+        async_mock_service(hass, "scene", svc)
+    hass.states.async_set("light.a", "on")
+    hass.states.async_set("light.b", "on")
+    room = make_room(hass, source="regions", regions=regions, drift_points=True, style="faithful", min_sat=0)
+
+    async def load(entity_id):
+        room.pixels, room.thumb = row * 64, b"jpg"
+        return True
+
+    with patch.object(room, "_async_load", AsyncMock(side_effect=load)):
+        room.start()
+        hass.states.async_set(PLAYER, "playing", {"entity_picture": "/c1", "media_title": "A"})
+        await hass.async_block_till_done()
+    assert room._unsub_tick is not None  # eigene Punkte wandern jetzt
+    on.clear()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=31))  # ein Wanderschritt (calm: 30 s, 6 % des Rings)
+    await hass.async_block_till_done()
+    a, b = on
+    assert 0 < a.data["hs_color"][0] < 120 or a.data["hs_color"][0] > 240  # a ist von Rot Richtung Blau gewandert
+    assert round(a.data["hs_color"][0]) != 0 and round(b.data["hs_color"][0]) != 240
+    await room.async_stop()

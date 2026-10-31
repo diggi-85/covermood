@@ -85,8 +85,9 @@ later; the lights follow without anything reloading.
 |---|---|
 | **Lights and spots on the cover** | Choose where the colors come from: *Automatic* (defining colors), *Zones* (left to right, like an Ambilight) or *Own points*. With own points every light gets a card with a **main spot** and **backup spots**; you move the rectangles on the cover and resize them with the square at the bottom right. A ✓ shows which spot counts right now. |
 | **Color** | Style (*Vibrant, Pastel, Faithful, Intense*), minimum saturation, and the brightness of the lights: *Leave alone*, *Fixed value* or *Follow the cover* (between a minimum and a maximum – never darker than the minimum). |
-| **Motion** | Mood (*Calm, Static, Party*), fade time for a new cover, how often the colors drift. Own points don't drift – each light keeps its spot. |
+| **Motion** | Mood (*Calm, Static, Party*), fade time for a new cover, how often the colors drift. Own points keep their spot by default; optionally they **drift around the lamps** (each lamp slowly runs through the colors of the others). |
 | **When and how** | Only for certain sources (e.g. only Spotify, not the TV), only while an entity is on, switch on lights that are off, restore afterwards, or set a **default color** at the end instead. |
+| **On/off switch** | Next to the room picker: turns Covermood on or off for that room – the same as the room's `switch` entity. |
 | **Test on lights** | Puts the current settings on your real lights for 10 seconds and then restores them – or the music colors, if music is playing. |
 
 The cover comes from the room's player – also when it is paused or idle, as long as it provides an image.

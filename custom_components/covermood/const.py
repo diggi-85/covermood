@@ -20,6 +20,7 @@ CONF_FADE = "fade"  # s, überschreibt die Überblendzeit der Stimmung; None = W
 CONF_EVERY = "every"  # s, überschreibt „Wandern alle …“ der Stimmung; None = Wert der Stimmung
 CONF_ONLY_SOURCES = "only_sources"  # nur wenn die Quelle (Attribut „source“) des Players eine dieser ist
 CONF_ONLY_WHILE = "only_while"  # nur solange diese Entität „on“ ist
+CONF_DRIFT_POINTS = "drift_points"  # eigene Punkte wandern reihum von Lampe zu Lampe
 CONF_DEFAULT_COLOR = "default_color"  # [Farbton, Sättigung %] – wird am Ende statt des Wiederherstellens gesetzt
 
 BRI_KEEP = "keep"  # Helligkeit der Lichter bleibt unberührt
@@ -70,4 +71,5 @@ DEFAULTS: dict[str, object] = {
     CONF_ONLY_SOURCES: [],
     CONF_ONLY_WHILE: None,
     CONF_DEFAULT_COLOR: None,
+    CONF_DRIFT_POINTS: False,
 }

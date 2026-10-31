@@ -15,6 +15,7 @@ from .const import (
     CONF_BRI_MODE,
     CONF_BRIGHTNESS,
     CONF_DEFAULT_COLOR,
+    CONF_DRIFT_POINTS,
     CONF_EVERY,
     CONF_FADE,
     CONF_MIN_BRI,
@@ -77,6 +78,7 @@ SETTINGS = vol.Schema(
         vol.Optional(CONF_EVERY): vol.Any(None, _number(0, 600)),
         vol.Optional(CONF_TURN_ON): cv.boolean,
         vol.Optional(CONF_RESTORE): cv.boolean,
+        vol.Optional(CONF_DRIFT_POINTS): cv.boolean,
         vol.Optional(CONF_ONLY_SOURCES): [cv.string],
         vol.Optional(CONF_ONLY_WHILE): vol.Any(None, "", cv.entity_id),
         vol.Optional(CONF_DEFAULT_COLOR): vol.Any(None, vol.ExactSequence([_number(0, 360), _number(0, 100)])),
@@ -90,7 +92,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     if hass.data.get(f"{DATA_REGISTERED}_ws"):
         return
     hass.data[f"{DATA_REGISTERED}_ws"] = True
-    for command in (ws_rooms, ws_subscribe, ws_preview, ws_test, ws_update):
+    for command in (ws_rooms, ws_subscribe, ws_preview, ws_test, ws_update, ws_enable):
         websocket_api.async_register_command(hass, command)
 
 
@@ -149,6 +151,7 @@ def ws_rooms(hass: HomeAssistant, connection: websocket_api.ActiveConnection, ms
         {
             "id": room.id,
             "name": room.name,
+            "enabled": room.enabled,
             "lights": [{"entity_id": e, "name": _name(hass, e)} for e in room.lights],
             "sources": _sources(hass, room),
             "settings": _settings(room),
@@ -226,4 +229,16 @@ async def ws_update(hass: HomeAssistant, connection: websocket_api.ActiveConnect
     room = found[1]
     if (patch := _patch(connection, msg, room)) is not None:
         await room.async_configure(patch)
+        connection.send_result(msg["id"])
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {vol.Required("type"): "covermood/enable", vol.Required("room_id"): str, vol.Required("enabled"): cv.boolean}
+)
+@websocket_api.async_response
+async def ws_enable(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
+    """Covermood für einen Raum an- oder ausschalten – dasselbe wie der Schalter des Raums."""
+    if found := _find(hass, connection, msg):
+        await found[1].async_set_enabled(msg["enabled"])
         connection.send_result(msg["id"])
