@@ -1,0 +1,27 @@
+apply:
+  fields:
+    room:
+      example: "Living room"
+      selector:
+        text:
+    preset:
+      example: "Evening"
+      selector:
+        text:
+    style:
+      selector:
+        select:
+          translation_key: style
+          options:
+            - vibrant
+            - pastel
+            - faithful
+            - intense
+    mode:
+      selector:
+        select:
+          translation_key: mode
+          options:
+            - calm
+            - static
+            - party

@@ -8,6 +8,7 @@ from __future__ import annotations
 import colorsys
 import math
 from collections.abc import Iterable, Sequence
+from functools import lru_cache
 from io import BytesIO
 from typing import NamedTuple
 
@@ -38,6 +39,12 @@ def _weight(s: float, v: float) -> float:
     return (s * v) ** 2
 
 
+@lru_cache(maxsize=1 << 15)
+def _hsv(r: int, g: int, b: int) -> tuple[float, float, float]:
+    """HSV eines Pixels – so rechnet auch hs_color der Lichter. Gemerkt, weil dasselbe Cover oft gemessen wird."""
+    return colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+
+
 def _hue_dist(a: float, b: float) -> float:
     d = abs(a - b) % 360
     return min(d, 360 - d)
@@ -50,7 +57,7 @@ def palette_from_pixels(pixels: Iterable[Pixel], n: int) -> list[Hs]:
     for r, g, b, a in pixels:
         if a < 128:
             continue
-        h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)  # HSV: so rechnet auch hs_color der Lichter
+        h, s, v = _hsv(r, g, b)
         h *= 360
         if v < 0.25:  # (fast) schwarz ist keine Farbe und auch nicht „grau“
             continue
@@ -81,43 +88,46 @@ def palette_from_pixels(pixels: Iterable[Pixel], n: int) -> list[Hs]:
     return picked
 
 
-def measure(pixels: Iterable[Pixel], size: int, rects: Sequence[Rect]) -> list[Hs | None]:
+def measure(pixels: Sequence[Pixel], size: int, rects: Sequence[Rect]) -> list[Hs | None]:
     """Farbe je Rechteck: Mittel der kräftigen Pixel darin. Der Farbton wird als Vektor gemittelt,
     damit 350° und 10° nicht bei 180° landen. Ein Rechteck ohne Farbe wird weiß/grau; ein (fast) schwarzes
     Rechteck – weniger als MIN_LIT helle Pixel – liefert None."""
-    acc = [[0.0] * 8 for _ in rects]  # x, y (Farbton als Vektor), s*w, v*w, w, Summe v heller Pixel, Zahl heller, Zahl aller
-    for i, (r, g, b, a) in enumerate(pixels):
-        if a < 128:
-            continue
-        h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
-        px, py = ((i % size) + 0.5) / size, ((i // size) + 0.5) / size
-        for z, (x, y, rw, rh) in zip(acc, rects):
-            if not (x <= px < x + rw and y <= py < y + rh):
-                continue
-            z[7] += 1
-            if v < 0.25:
-                continue
-            z[5] += v
-            z[6] += 1
-            if s < 0.05:
-                continue
-            w = _weight(s, v)
-            z[0] += w * math.cos(h * math.tau)
-            z[1] += w * math.sin(h * math.tau)
-            z[2] += w * s
-            z[3] += w * v
-            z[4] += w
-    return [
-        None
-        if not z[7] or z[6] / z[7] < MIN_LIT
-        else Hs(math.degrees(math.atan2(z[1], z[0])) % 360, z[2] / z[4], z[3] / z[4])
-        if z[4]
-        else Hs(0, 0, z[5] / z[6])
-        for z in acc
-    ]
+    mids = [(i + 0.5) / size for i in range(size)]
+    out: list[Hs | None] = []
+    for x, y, rw, rh in rects:
+        cols = [i for i, m in enumerate(mids) if x <= m < x + rw]
+        hx = hy = sw = vw = weight = lit_v = 0.0  # Farbton als Vektor, s*w, v*w, w, Summe v heller Pixel
+        lit = total = 0
+        # Nur die Pixel im Rechteck ansehen – ein kleiner Punkt kostet so fast nichts
+        for row in (i for i, m in enumerate(mids) if y <= m < y + rh):
+            for col in cols:
+                r, g, b, a = pixels[row * size + col]
+                if a < 128:
+                    continue
+                total += 1
+                h, s, v = _hsv(r, g, b)
+                if v < 0.25:
+                    continue
+                lit_v += v
+                lit += 1
+                if s < 0.05:
+                    continue
+                w = _weight(s, v)
+                hx += w * math.cos(h * math.tau)
+                hy += w * math.sin(h * math.tau)
+                sw += w * s
+                vw += w * v
+                weight += w
+        if not total or lit / total < MIN_LIT:
+            out.append(None)
+        elif weight:
+            out.append(Hs(math.degrees(math.atan2(hy, hx)) % 360, sw / weight, vw / weight))
+        else:
+            out.append(Hs(0, 0, lit_v / lit))
+    return out
 
 
-def regions_from_pixels(pixels: Iterable[Pixel], size: int, rects: Sequence[Rect]) -> list[Hs]:
+def regions_from_pixels(pixels: Sequence[Pixel], size: int, rects: Sequence[Rect]) -> list[Hs]:
     """Wie measure, aber ein dunkles Rechteck wird grau statt None."""
     return [c or Hs(0, 0) for c in measure(pixels, size, rects)]
 
@@ -126,7 +136,7 @@ def pick_points(pixels: Sequence[Pixel], size: int, lights_rects: Sequence[Seque
     """Je Licht die Farbe seines ersten hellen Bereichs (Hauptpunkt, dann die Ersatzpunkte der Reihe nach).
     Ist keiner hell genug, bekommt das Licht eine prägende Farbe des ganzen Covers."""
     flat = measure(pixels, size, [r for rects in lights_rects for r in rects])
-    fallback = palette_from_pixels(pixels, len(lights_rects))
+    fallback: list[Hs] | None = None  # erst ausrechnen, wenn ein Licht sie wirklich braucht
     picks, at = [], 0
     for i, rects in enumerate(lights_rects):
         found = flat[at : at + len(rects)]
@@ -135,11 +145,13 @@ def pick_points(pixels: Sequence[Pixel], size: int, lights_rects: Sequence[Seque
         if k is not None:
             picks.append(Pick(found[k], k))
         else:
+            if fallback is None:
+                fallback = palette_from_pixels(pixels, len(lights_rects))
             picks.append(Pick(fallback[i % len(fallback)] if fallback else None, -1))
     return picks
 
 
-def zones_from_pixels(pixels: Iterable[Pixel], size: int, n: int) -> list[Hs]:
+def zones_from_pixels(pixels: Sequence[Pixel], size: int, n: int) -> list[Hs]:
     """Farbe je senkrechtem Streifen (links → rechts); [] bei einem Cover ganz ohne Farbe."""
     colors = regions_from_pixels(pixels, size, [(i / n, 0.0, 1 / n, 1.0) for i in range(n)])
     return colors if any(c.s for c in colors) else []

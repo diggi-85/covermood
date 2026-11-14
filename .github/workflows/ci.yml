@@ -34,7 +34,7 @@ jobs:
       - run: python -m pytest -q
 
   frontend:
-    name: Editor (syntax check)
+    name: Editor (syntax and logic)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,3 +42,4 @@ jobs:
         with:
           node-version: "22"
       - run: node --check custom_components/covermood/frontend/covermood-panel.js
+      - run: node --test tests/panel.test.mjs

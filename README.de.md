@@ -5,7 +5,7 @@
 <p align="center">
   <a href="https://my.home-assistant.io/redirect/hacs_repository/?owner=diggi-85&repository=covermood&category=integration"><img src="https://my.home-assistant.io/badges/hacs_repository.svg" alt="In HACS öffnen"></a>
   <a href="https://github.com/diggi-85/covermood/actions/workflows/ci.yml"><img src="https://github.com/diggi-85/covermood/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/version-0.1-blue" alt="Version 0.1">
+  <img src="https://img.shields.io/badge/version-0.2-blue" alt="Version 0.2">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT"></a>
 </p>
 
@@ -16,7 +16,7 @@ an – jede Lampe von genau der Stelle im Cover, die du für sie ausgesucht hast
 überblendet. Pause, und alles kehrt in den Zustand davor zurück. Das klappt mit jedem Musikdienst, dessen Cover in
 Home Assistant ankommt: Spotify, Sonos, Apple Music / AirPlay, Plex, Music Assistant und mehr.
 
-![Der Covermood-Editor: das Cover mit einer Stelle je Lampe, die Raumvorschau und alle Einstellungen](https://raw.githubusercontent.com/diggi-85/covermood/main/docs/screenshots/de/wave.jpg)
+![Der Covermood-Editor: das Cover mit einer Stelle je Lampe, die Wand-Vorschau und ein Punkt, der über die Welle pendelt](https://raw.githubusercontent.com/diggi-85/covermood/main/docs/screenshots/de/wave.jpg)
 
 <table>
   <tr>
@@ -25,7 +25,7 @@ Home Assistant ankommt: Spotify, Sonos, Apple Music / AirPlay, Plex, Music Assis
   </tr>
   <tr>
     <td align="center"><sub><b>Pastell</b> – der Hauptpunkt der Stehlampe liegt auf einem dunklen Baum, also springt ihr <b>Ersatzpunkt</b> ein (✓)</sub></td>
-    <td align="center"><sub><b>Intensiv</b> – die rote Sonne, die orange Spiegelung, der rosa Himmel</sub></td>
+    <td align="center"><sub><b>Intensiv</b> – der Punkt der Tischleuchte <b>pendelt</b> über den Morgenhimmel</sub></td>
   </tr>
 </table>
 
@@ -37,6 +37,8 @@ Home Assistant ankommt: Spotify, Sonos, Apple Music / AirPlay, Plex, Music Assis
   bekommt genau diese Farbe. Schluss mit „irgendwie schmutzigem Braun“.
 - 🛟 **Ersatzpunkte.** Ist der Hauptpunkt gerade schwarz? Dann springt der nächste Punkt ein, und sind alle dunkel,
   nimmt die Lampe eine prägende Farbe des ganzen Covers. Dein Raum wird nie dunkel oder grau.
+- 🌀 **Punkte, die sich bewegen.** Lass den Punkt einer Lampe langsam über das Cover pendeln – der Raum verändert
+  sich sanft, auch innerhalb eines Lieds.
 - 🖼️ **Ein Editor in Echtzeit.** Das Cover wechselt *im Editor* mit jedem Titel, und die Raumvorschau zeigt, wie deine
   Leuchtmittel glühen werden – bevor du ein echtes Licht anfasst.
 - 🎨 **Vier Stile:** *Lebendig*, *Pastell*, *Originalgetreu* und *Intensiv* – dazu Regler für Mindestsättigung und
@@ -45,10 +47,12 @@ Home Assistant ankommt: Spotify, Sonos, Apple Music / AirPlay, Plex, Music Assis
   stillstehen.
 - 🎛️ **Stimmungen Ruhig, Statisch und Party**, jederzeit umschaltbar – und eine neue Stimmung ist ein einziger Eintrag
   in einer Datei.
+- 💾 **Vorlagen und Punkte je Album.** Speichere ein Aussehen als „Abend“ oder „Party“ und rufe es aus einer
+  Automation ab; gib einem Lieblingsalbum eigene Punkte.
 - 🏠 **Mehrere Räume**, jeder mit eigenen Playern, Lichtern, Punkten und Einstellungen. Räume, Player und Lichter liest
   der Assistent aus Home Assistant (Bereiche werden als Vorschlag übernommen).
 - 🧯 **Rücksichtsvoll zu deinen Lichtern.** Danach kommt der vorherige Zustand zurück (oder eine Standardfarbe wird
-  gesetzt), Pausen setzen nichts zurück, ausgeschaltete Lichter bleiben aus – außer du willst sie eingeschaltet haben.
+  gesetzt) – auch über einen Neustart von Home Assistant mitten im Lied hinweg –, Pausen setzen nichts zurück, ausgeschaltete Lichter bleiben aus – außer du willst sie eingeschaltet haben.
 - 🌍 **Deutsch und Englisch** – Einrichtungsassistent, Editor und alle Entitäten.
 
 ## Installation
@@ -81,19 +85,33 @@ hinzu.
 
 ## Der Editor
 
-*Seitenleiste → Covermood.* Alles, was du änderst, erscheint sofort in der Vorschau und wird kurz darauf gespeichert;
-die Lichter folgen, ohne dass etwas neu lädt.
+*Seitenleiste → Covermood.* Die Seite nimmt die Farben des Covers an, eine Wand-Vorschau zeigt, wie der Raum leuchten
+wird, und alles, was du änderst, wird kurz darauf gespeichert – die Lichter folgen, ohne dass etwas neu lädt.
 
-| Abschnitt | Was du einstellen kannst |
+| Reiter | Was du einstellen kannst |
 |---|---|
-| **Lichter und Stellen im Cover** | Woher die Farben kommen: *Automatisch* (prägende Farben), *Zonen* (von links nach rechts, wie ein Ambilight) oder *Eigene Punkte*. Bei eigenen Punkten hat jedes Licht eine Karte mit **Hauptpunkt** und **Ersatzpunkten**; die Rechtecke verschiebst du auf dem Cover und änderst die Größe am Quadrat unten rechts. Ein ✓ zeigt, welcher Punkt gerade zählt. |
+| **Punkte** | Woher die Farben kommen: *Automatisch* (prägende Farben), *Zonen* (von links nach rechts, wie ein Ambilight) oder *Eigene Punkte*. Bei eigenen Punkten hat jedes Licht eine Karte mit **Hauptpunkt** und **Ersatzpunkten**; die Rechtecke ziehst du auf dem Cover und änderst die Größe an der Ecke. Jedes Rechteck zeigt die Farbe, die es misst. Mit **Bewegung** pendelt der Hauptpunkt langsam zu einem zweiten Punkt und zurück. **Nur für dieses Album** merkt sich Punkte eigens für das laufende Album. **Leuchtmittel abgleichen** korrigiert eine Lampe, die Farben anders zeigt als die anderen. |
 | **Farbe** | Stil (*Lebendig, Pastell, Originalgetreu, Intensiv*), Mindestsättigung und Helligkeit der Lichter: *Nicht ändern*, *Fester Wert* oder *Folgt dem Cover* (zwischen Minimum und Maximum – nie dunkler als das Minimum). |
-| **Bewegung** | Stimmung (*Ruhig, Statisch, Party*), Überblendzeit bei neuem Cover, wie oft die Farben wandern. Eigene Punkte behalten standardmäßig ihre Stelle; auf Wunsch **wandern sie reihum über die Lampen** (jede Lampe läuft langsam über die Farben der anderen). |
-| **Wann und wie** | Nur bei bestimmten Quellen (z. B. nur Spotify, nicht der Fernseher), nur solange eine Entität an ist, ausgeschaltete Lichter einschalten, danach zurücksetzen oder am Ende stattdessen eine **Standardfarbe** setzen. |
-| **An/Aus-Schalter** | Neben der Raumauswahl: schaltet Covermood für den Raum an oder aus – dasselbe wie der `switch` des Raums. |
-| **Auf Lichtern testen** | Legt die aktuellen Einstellungen 10 Sekunden auf deine echten Lichter und stellt sie danach wieder her – oder die Musikfarben, wenn Musik läuft. |
+| **Bewegung** | Stimmung (*Ruhig, Statisch, Party*), Überblendzeit bei neuem Cover, wie oft die Farben wandern, ob eigene Punkte reihum über die Lampen wandern und wie lange ein pendelnder Punkt hin und zurück braucht. Die Vorschau spielt das alles ab. |
+| **Regeln** | Nur bei bestimmten Quellen (z. B. nur Spotify, nicht der Fernseher), nur solange eine Entität an ist, ausgeschaltete Lichter einschalten, danach zurücksetzen oder am Ende stattdessen eine **Standardfarbe** setzen. |
+| **Vorlagen** | Das aktuelle Aussehen (Stil, Helligkeit, Stimmung, Tempo) unter einem Namen speichern und mit einem Klick abrufen – oder aus einer Automation. |
+
+Neben der Raumauswahl schaltet **Aktiv** Covermood für den Raum an oder aus. **Auf Lichtern testen** legt die aktuellen
+Einstellungen 10 Sekunden auf deine echten Lichter und stellt sie danach wieder her.
 
 Das Cover kommt vom Player des Raums – auch wenn er pausiert oder im Leerlauf ist, solange er ein Bild liefert.
+
+## Automationen
+
+Die Aktion **Covermood: Aussehen anwenden** (`covermood.apply`) setzt eine Vorlage, einen Stil oder eine Stimmung – für
+einen Raum oder, ohne Raum, für alle:
+
+```yaml
+action: covermood.apply
+data:
+  room: Wohnzimmer
+  preset: Abend
+```
 
 ## Stimmungen und Stile
 
@@ -125,6 +143,10 @@ Das Cover kommt vom Player des Raums – auch wenn er pausiert oder im Leerlauf 
   *Folgt dem Cover*. Ausgeschaltete schaltet Covermood nur **beim Start der Musik** ein (Option); wer sie danach
   ausmacht, behält recht.
 - Schwarze Stellen im Cover werden nie als Farbe verwendet.
+- Ein pendelnder Punkt schickt jeder Lampe alle 3 Sekunden einen weichen Schritt – schneller vertragen viele
+  Leuchtmittel keine Befehle.
+- Startet Home Assistant neu, während Musik läuft, merkt sich Covermood den Zustand der Lichter vor der Musik und
+  stellt ihn wieder her, sobald die Lichter erreichbar sind.
 - Nur Lichter mit Farbunterstützung (HS/RGB/XY) stehen zur Auswahl.
 - Ein Cover ohne Farbe (Graustufen) färbt Lichter weiß; ohne lesbares Cover bleiben die Lichter unberührt.
 - Eine **Standardfarbe** ersetzt das Zurücksetzen auf den Zustand vor der Musik.
@@ -153,7 +175,8 @@ python -m pytest
 ## Quellen
 
 Die Screenshots verwenden gemeinfreie Kunstwerke von Wikimedia Commons: *Die große Welle vor Kanagawa* (Katsushika
-Hokusai), *Sternennacht* (Vincent van Gogh) und *Impression, soleil levant* (Claude Monet).
+Hokusai), *Sternennacht* (Vincent van Gogh) und *Impression, soleil levant* (Claude Monet). Logo und Banner sind in
+[Inter](https://github.com/rsms/inter) gesetzt (SIL Open Font License).
 
 ## Lizenz
 

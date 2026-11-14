@@ -21,6 +21,11 @@ CONF_EVERY = "every"  # s, überschreibt „Wandern alle …“ der Stimmung; No
 CONF_ONLY_SOURCES = "only_sources"  # nur wenn die Quelle (Attribut „source“) des Players eine dieser ist
 CONF_ONLY_WHILE = "only_while"  # nur solange diese Entität „on“ ist
 CONF_DRIFT_POINTS = "drift_points"  # eigene Punkte wandern reihum von Lampe zu Lampe
+CONF_PATHS = "paths"  # {Licht: [links, oben, Breite, Höhe]} – Ziel, zu dem der Hauptpunkt pendelt
+CONF_PATH_PERIOD = "path_period"  # s für einmal hin und zurück
+CONF_CALIBRATION = "calibration"  # {Licht: [Farbton-Verschiebung in Grad, Sättigung in %]} – gleicht Leuchtmittel an
+CONF_PRESETS = "presets"  # {Name: {Stil, Stimmung, Helligkeit …}} – Vorlagen des Raums
+CONF_COVER_SPOTS = "cover_spots"  # {Album: {regions, paths}} – eigene Punkte nur für dieses Album
 CONF_DEFAULT_COLOR = "default_color"  # [Farbton, Sättigung %] – wird am Ende statt des Wiederherstellens gesetzt
 
 BRI_KEEP = "keep"  # Helligkeit der Lichter bleibt unberührt
@@ -36,6 +41,7 @@ CONF_REGIONS = "regions"  # {Licht: [[links, oben, Breite, Höhe], …]} in Bruc
 
 URL_BASE = "/covermood_static"
 PANEL_PATH = "covermood"
+DATA_MEMORY = f"{DOMAIN}_memory"
 DATA_REGISTERED = f"{DOMAIN}_registered"  # Statischer Pfad und WebSocket-Befehle nur einmal je HA-Lauf
 
 DEFAULT_MODE = "calm"
@@ -46,6 +52,14 @@ DEFAULT_MIN_SAT = 35
 DEFAULT_MIN_BRI = 20
 MIN_POINTS, MAX_POINTS = 2, 12
 MAX_SPOTS = 5  # Bereiche je Licht: Hauptpunkt + Ersatz
+DEFAULT_PATH_PERIOD = 60
+PATH_STEP = 3  # s zwischen zwei Schritten eines pendelnden Punkts – öfter vertragen viele Leuchtmittel nicht
+PATH_FRAMES = 7  # so viele Farben entlang einer Bahn bekommt der Editor für seine Vorschau
+MAX_PRESETS = 20
+MAX_COVER_SPOTS = 200  # Alben mit eigenen Punkten; das älteste fällt heraus
+RESTORE_DELAY = 20  # s nach dem Start, bis ein liegen gebliebener Zustand zurückgespielt wird (Lichter müssen erst da sein)
+RESTORE_TRIES = 10  # so oft wird das wiederholt, solange Lichter noch nicht erreichbar sind
+MAX_COVER_BYTES = 10_000_000  # größere Bilder lädt Covermood nicht
 
 # Pause zwischen zwei Titeln oder kurzes Anhalten soll die Lichter nicht zurücksetzen
 GRACE_SECONDS = 30
@@ -72,4 +86,23 @@ DEFAULTS: dict[str, object] = {
     CONF_ONLY_WHILE: None,
     CONF_DEFAULT_COLOR: None,
     CONF_DRIFT_POINTS: False,
+    CONF_PATHS: {},
+    CONF_PATH_PERIOD: DEFAULT_PATH_PERIOD,
+    CONF_CALIBRATION: {},
+    CONF_PRESETS: {},
+    CONF_COVER_SPOTS: {},
 }
+
+# Was eine Vorlage festhält
+PRESET_KEYS = (
+    CONF_STYLE,
+    CONF_MIN_SAT,
+    CONF_BRI_MODE,
+    CONF_BRIGHTNESS,
+    CONF_MIN_BRI,
+    CONF_MODE,
+    CONF_FADE,
+    CONF_EVERY,
+    CONF_DRIFT_POINTS,
+    CONF_PATH_PERIOD,
+)

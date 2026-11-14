@@ -14,6 +14,8 @@ from .const import (
     BRI_MODES,
     CONF_BRI_MODE,
     CONF_BRIGHTNESS,
+    CONF_CALIBRATION,
+    CONF_COVER_SPOTS,
     CONF_DEFAULT_COLOR,
     CONF_DRIFT_POINTS,
     CONF_EVERY,
@@ -23,7 +25,10 @@ from .const import (
     CONF_MODE,
     CONF_ONLY_SOURCES,
     CONF_ONLY_WHILE,
+    CONF_PATH_PERIOD,
+    CONF_PATHS,
     CONF_POINTS,
+    CONF_PRESETS,
     CONF_REGIONS,
     CONF_RESTORE,
     CONF_SOURCE,
@@ -33,8 +38,10 @@ from .const import (
     DEFAULTS,
     DOMAIN,
     MAX_POINTS,
+    MAX_PRESETS,
     MAX_SPOTS,
     MIN_POINTS,
+    PRESET_KEYS,
     SOURCES,
     TEST_SECONDS,
 )
@@ -63,26 +70,36 @@ def _percent(low: int = 0) -> vol.All:
     return vol.All(vol.Coerce(int), vol.Range(min=low, max=100))
 
 
+# Was Stil, Bewegung und Helligkeit bestimmt – auch der Inhalt einer Vorlage
+LOOK = {
+    vol.Optional(CONF_MODE): vol.In(list(MODES)),
+    vol.Optional(CONF_STYLE): vol.In(list(STYLES)),
+    vol.Optional(CONF_SOURCE): vol.In(SOURCES),
+    vol.Optional(CONF_POINTS): vol.All(vol.Coerce(int), vol.Range(min=MIN_POINTS, max=MAX_POINTS)),
+    vol.Optional(CONF_MIN_SAT): _percent(),
+    vol.Optional(CONF_MIN_BRI): _percent(1),
+    vol.Optional(CONF_BRIGHTNESS): _percent(1),
+    vol.Optional(CONF_BRI_MODE): vol.In(BRI_MODES),
+    vol.Optional(CONF_FADE): vol.Any(None, _number(0, 60)),
+    vol.Optional(CONF_EVERY): vol.Any(None, _number(0, 600)),
+    vol.Optional(CONF_DRIFT_POINTS): cv.boolean,
+    vol.Optional(CONF_PATH_PERIOD): _number(10, 600),
+}
+PRESET = vol.Schema({key: check for key, check in LOOK.items() if key.schema in PRESET_KEYS})
+
 # Alles, was der Editor ändern darf – jedes Feld einzeln, ein Teil genügt
 SETTINGS = vol.Schema(
     {
-        vol.Optional(CONF_MODE): vol.In(list(MODES)),
-        vol.Optional(CONF_STYLE): vol.In(list(STYLES)),
-        vol.Optional(CONF_SOURCE): vol.In(SOURCES),
-        vol.Optional(CONF_POINTS): vol.All(vol.Coerce(int), vol.Range(min=MIN_POINTS, max=MAX_POINTS)),
-        vol.Optional(CONF_MIN_SAT): _percent(),
-        vol.Optional(CONF_MIN_BRI): _percent(1),
-        vol.Optional(CONF_BRIGHTNESS): _percent(1),
-        vol.Optional(CONF_BRI_MODE): vol.In(BRI_MODES),
-        vol.Optional(CONF_FADE): vol.Any(None, _number(0, 60)),
-        vol.Optional(CONF_EVERY): vol.Any(None, _number(0, 600)),
+        **LOOK,
         vol.Optional(CONF_TURN_ON): cv.boolean,
         vol.Optional(CONF_RESTORE): cv.boolean,
-        vol.Optional(CONF_DRIFT_POINTS): cv.boolean,
         vol.Optional(CONF_ONLY_SOURCES): [cv.string],
         vol.Optional(CONF_ONLY_WHILE): vol.Any(None, "", cv.entity_id),
         vol.Optional(CONF_DEFAULT_COLOR): vol.Any(None, vol.ExactSequence([_number(0, 360), _number(0, 100)])),
         vol.Optional(CONF_REGIONS): {cv.entity_id: vol.All([_rect], vol.Length(min=1, max=MAX_SPOTS))},
+        vol.Optional(CONF_PATHS): {cv.entity_id: _rect},
+        vol.Optional(CONF_CALIBRATION): {cv.entity_id: vol.ExactSequence([_number(-30, 30), _number(50, 150)])},
+        vol.Optional(CONF_PRESETS): vol.All({cv.string: PRESET}, vol.Length(max=MAX_PRESETS)),
     }
 )
 
@@ -108,7 +125,8 @@ def _find(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: 
 def _patch(connection: websocket_api.ActiveConnection, msg: dict[str, Any], room: RoomController) -> dict[str, Any] | None:
     """Die Einstellungen aus der Nachricht, auf diesen Raum zugeschnitten (nur seine Lichter, leere Entität = keine)."""
     patch = dict(msg["settings"])
-    if not set(patch.get(CONF_REGIONS, {})) <= set(room.lights):
+    lights = set(room.lights)
+    if not all(set(patch.get(key, {})) <= lights for key in (CONF_REGIONS, CONF_PATHS, CONF_CALIBRATION)):
         connection.send_error(msg["id"], "invalid_format", "Spot for a light that is not part of this room")
         return None
     if CONF_ONLY_WHILE in patch:
@@ -125,7 +143,10 @@ def _needs_cover(connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 
 def _settings(room: RoomController) -> dict[str, Any]:
     """Alle Editor-Einstellungen des Raums; Bereiche vollständig (auch die Streifen, die er noch nicht gespeichert hat)."""
-    return {k: room.cfg[k] for k in DEFAULTS} | {CONF_REGIONS: dict(zip(room.lights, room.rect_lists(), strict=True))}
+    still = {**room.cfg, CONF_PATHS: {}}  # die Startpunkte, nicht den Stand der Bewegung
+    regions = dict(zip(room.lights, room.rect_lists(still), strict=True))
+    # Die Punkte einzelner Alben verwaltet der Server; der Editor bekommt sie mit dem laufenden Titel
+    return {k: v for k, v in room.cfg.items() if k in DEFAULTS and k != CONF_COVER_SPOTS} | {CONF_REGIONS: regions}
 
 
 def _name(hass: HomeAssistant, entity_id: str) -> str:
@@ -160,8 +181,10 @@ def ws_rooms(hass: HomeAssistant, connection: websocket_api.ActiveConnection, ms
         for room in getattr(entry, "runtime_data", {}).values()
     ]
     # Die Vorgaben der Stimmungen, damit der Editor beim Wechsel die Regler passend stellt
-    modes = {key: {"fade": m.fade, "every": m.every} for key, m in MODES.items()}
-    connection.send_result(msg["id"], {"rooms": rooms, "modes": modes, "max_spots": MAX_SPOTS})
+    modes = {key: {"fade": m.fade, "every": m.every, "shift": m.shift} for key, m in MODES.items()}
+    connection.send_result(
+        msg["id"], {"rooms": rooms, "modes": modes, "max_spots": MAX_SPOTS, "preset_keys": list(PRESET_KEYS)}
+    )
 
 
 @websocket_api.require_admin
@@ -177,7 +200,7 @@ async def ws_subscribe(hass: HomeAssistant, connection: websocket_api.ActiveConn
 
     @callback
     def push() -> None:
-        event = room.now_playing() | {"active": room.active}
+        event = room.now_playing() | {"active": room.active, "gone": room.stopped}
         if not sent or sent[0] is not room.thumb:
             sent[:] = [room.thumb]
             event["image"] = "data:image/jpeg;base64," + base64.b64encode(room.thumb).decode() if room.thumb else None
@@ -219,7 +242,13 @@ async def ws_test(hass: HomeAssistant, connection: websocket_api.ActiveConnectio
 
 @websocket_api.require_admin
 @websocket_api.websocket_command(
-    {vol.Required("type"): "covermood/update", vol.Required("room_id"): str, vol.Required("settings"): SETTINGS}
+    {
+        vol.Required("type"): "covermood/update",
+        vol.Required("room_id"): str,
+        vol.Required("settings"): SETTINGS,
+        vol.Optional("album"): cv.boolean,  # True: die Punkte gelten nur für das laufende Album; False: Album-Punkte weg
+        vol.Optional("album_name"): cv.string,  # das Album, das der Editor dabei vor sich hatte
+    }
 )
 @websocket_api.async_response
 async def ws_update(hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]) -> None:
@@ -228,6 +257,15 @@ async def ws_update(hass: HomeAssistant, connection: websocket_api.ActiveConnect
         return
     room = found[1]
     if (patch := _patch(connection, msg, room)) is not None:
+        if "album" in msg and msg.get("album_name", room.album_label) != room.album_label:
+            # Der Titel hat gewechselt, während der Editor speicherte – die Punkte gehörten zum vorigen Album
+            connection.send_error(msg["id"], "album_changed", "The album changed while saving")
+            return
+        if "album" in msg and room.album:
+            spots = None
+            if msg["album"]:  # Punkte und Bahnen wandern zum Album, die des Raums bleiben, wie sie sind
+                spots = {key: patch.pop(key) for key in (CONF_REGIONS, CONF_PATHS) if key in patch}
+            patch[CONF_COVER_SPOTS] = room.set_album_spots(spots)
         await room.async_configure(patch)
         connection.send_result(msg["id"])
 

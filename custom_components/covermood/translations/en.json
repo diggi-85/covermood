@@ -8,14 +8,24 @@
       "room": {
         "title": "Room",
         "description": "Pick an area from Home Assistant. Its media players and lights are suggested in the next step. Without an area, just enter a name.",
-        "data": { "area": "Area", "name": "Name" },
-        "data_description": { "name": "Leave empty to use the area name." }
+        "data": {
+          "area": "Area",
+          "name": "Name"
+        },
+        "data_description": {
+          "name": "Leave empty to use the area name."
+        }
       },
       "devices": {
         "title": "Players and lights",
         "description": "As soon as one of these players is playing, Covermood colors the lights. With several players, the first one currently playing wins.",
-        "data": { "players": "Media players", "lights": "Lights" },
-        "data_description": { "lights": "The order you select them in is the direction of the gradient, e.g. left to right. Only lights that support color are offered." }
+        "data": {
+          "players": "Media players",
+          "lights": "Lights"
+        },
+        "data_description": {
+          "lights": "The order you select them in is the direction of the gradient, e.g. left to right. Only lights that support color are offered."
+        }
       },
       "look": {
         "title": "Mood",
@@ -44,19 +54,32 @@
   "config_subentries": {
     "room": {
       "entry_type": "Room",
-      "initiate_flow": { "user": "Add room", "reconfigure": "Edit room" },
+      "initiate_flow": {
+        "user": "Add room",
+        "reconfigure": "Edit room"
+      },
       "step": {
         "room": {
           "title": "Room",
           "description": "Pick an area from Home Assistant. Its media players and lights are suggested in the next step. Without an area, just enter a name.",
-          "data": { "area": "Area", "name": "Name" },
-          "data_description": { "name": "Leave empty to use the area name." }
+          "data": {
+            "area": "Area",
+            "name": "Name"
+          },
+          "data_description": {
+            "name": "Leave empty to use the area name."
+          }
         },
         "devices": {
           "title": "Players and lights",
           "description": "As soon as one of these players is playing, Covermood colors the lights. With several players, the first one currently playing wins.",
-          "data": { "players": "Media players", "lights": "Lights" },
-          "data_description": { "lights": "The order you select them in is the direction of the gradient, e.g. left to right. Only lights that support color are offered." }
+          "data": {
+            "players": "Media players",
+            "lights": "Lights"
+          },
+          "data_description": {
+            "lights": "The order you select them in is the direction of the gradient, e.g. left to right. Only lights that support color are offered."
+          }
         },
         "look": {
           "title": "Mood",
@@ -81,7 +104,9 @@
         "no_players": "Pick at least one media player.",
         "no_lights": "Pick at least one light."
       },
-      "abort": { "reconfigure_successful": "Room saved." }
+      "abort": {
+        "reconfigure_successful": "Room saved."
+      }
     }
   },
   "selector": {
@@ -98,17 +123,65 @@
         "zones": "Image zones from left to right",
         "regions": "Custom regions – set per light in the “Covermood” editor"
       }
+    },
+    "style": {
+      "options": {
+        "vibrant": "Vibrant",
+        "pastel": "Pastel",
+        "faithful": "Faithful",
+        "intense": "Intense"
+      }
     }
   },
   "entity": {
-    "switch": { "enabled": { "name": "Active" } },
+    "switch": {
+      "enabled": {
+        "name": "Active"
+      }
+    },
     "select": {
       "mode": {
         "name": "Mood",
-        "state": { "calm": "Calm", "static": "Static", "party": "Party" }
+        "state": {
+          "calm": "Calm",
+          "static": "Static",
+          "party": "Party"
+        }
       }
     },
-    "sensor": { "palette": { "name": "Color palette" } },
-    "binary_sensor": { "active": { "name": "Coloring lights" } }
+    "sensor": {
+      "palette": {
+        "name": "Color palette"
+      }
+    },
+    "binary_sensor": {
+      "active": {
+        "name": "Coloring lights"
+      }
+    }
+  },
+  "services": {
+    "apply": {
+      "name": "Apply look",
+      "description": "Applies a saved preset, a color style or a mood to a room – or to all rooms.",
+      "fields": {
+        "room": {
+          "name": "Room",
+          "description": "Name of the Covermood room. Leave empty for all rooms."
+        },
+        "preset": {
+          "name": "Preset",
+          "description": "Name of a preset saved in the editor."
+        },
+        "style": {
+          "name": "Style",
+          "description": "Color style."
+        },
+        "mode": {
+          "name": "Mood",
+          "description": "Mood (motion)."
+        }
+      }
+    }
   }
 }

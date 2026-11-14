@@ -1,4 +1,5 @@
 import pytest
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.config_entries import ConfigSubentryData
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
 
@@ -129,3 +130,39 @@ async def test_editor_can_switch_a_room_off_and_on(hass, hass_ws_client, room):
     await ws.send_json_auto_id({"type": "covermood/enable", "room_id": controller.id, "enabled": True})
     assert (await ws.receive_json())["success"]
     assert controller.enabled is True
+
+
+async def test_spots_can_be_saved_for_the_playing_album_only(hass, hass_ws_client, room):
+    entry, controller = room
+    controller.album, controller.album_label = "mj|bad", "Bad"
+    ws = await hass_ws_client(hass)
+    spots = {"regions": {"light.a": [[0, 0, 0.3, 0.3]], "light.b": [[0.5, 0.5, 0.3, 0.3]]}, "paths": {"light.a": [0.6, 0.6, 0.3, 0.3]}}
+    await ws.send_json_auto_id({"type": "covermood/update", "room_id": controller.id, "settings": spots, "album": True})
+    assert (await ws.receive_json())["success"]
+    (sub,) = entry.subentries.values()
+    assert sub.data["cover_spots"]["mj|bad"]["paths"] == spots["paths"]
+    assert "regions" not in sub.data  # die Punkte des Raums bleiben unberührt
+
+    # Der Editor hatte noch ein anderes Album vor sich: nichts speichern
+    stale = {"type": "covermood/update", "room_id": controller.id, "settings": spots, "album": True, "album_name": "Thriller"}
+    await ws.send_json_auto_id(stale)
+    assert (await ws.receive_json())["error"]["code"] == "album_changed"
+
+    await ws.send_json_auto_id({"type": "covermood/update", "room_id": controller.id, "settings": {}, "album": False})
+    assert (await ws.receive_json())["success"]
+    (sub,) = entry.subentries.values()
+    assert sub.data["cover_spots"] == {}
+
+    await ws.send_json_auto_id({"type": "covermood/rooms"})
+    assert "cover_spots" not in (await ws.receive_json())["result"]["rooms"][0]["settings"]
+
+
+async def test_apply_service_sets_preset_style_and_mood(hass, room):
+    _, controller = room
+    await controller.async_configure({"presets": {"Abend": {"style": "pastel", "min_sat": 10}}})
+    await hass.services.async_call("covermood", "apply", {"room": "wohnzimmer", "preset": "Abend"}, blocking=True)
+    assert controller.cfg["style"] == "pastel" and controller.cfg["min_sat"] == 10
+    await hass.services.async_call("covermood", "apply", {"style": "intense", "mode": "party"}, blocking=True)
+    assert controller.cfg["style"] == "intense" and controller.cfg["mode"] == "party" and controller.cfg["every"] is None
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call("covermood", "apply", {"preset": "nix"}, blocking=True)

@@ -1,9 +1,12 @@
-// Covermood-Editor: Stellen im Cover je Licht, Farbstil, Bewegung, Einschränkungen. Ohne Build, ohne Abhängigkeiten.
-// Jede Änderung wirkt sofort auf die Vorschau und – nach kurzer Pause – auf die Lichter; gespeichert wird von selbst.
+// Covermood-Editor: Stellen im Cover je Licht (fest oder pendelnd), Farbstil, Bewegung, Regeln, Vorlagen.
+// Ohne Build, ohne Abhängigkeiten. Jede Änderung wirkt sofort auf die Vorschau und – nach kurzer Pause – auf die
+// Lichter; gespeichert wird von selbst.
 const MIN = 0.03;
-const STRUCTURAL = ["source", "mode", "style", "bri_mode", "default_color", "drift_points"]; // ändern, was zu sehen ist – sonst genügt der Wert
+// Ändern, was zu sehen ist – bei allen anderen Einstellungen genügt es, den Wert nachzuführen
+const STRUCTURAL = ["source", "mode", "style", "bri_mode", "default_color", "drift_points"];
 const HUES = [200, 35, 140, 330, 60, 270, 10, 170, 100, 300, 230, 80];
 const GATE_DOMAINS = ["input_boolean", "switch", "binary_sensor", "light"];
+const TABS = ["spots", "color", "motion", "rules", "presets"];
 const T = {
   de: {
     room: "Raum",
@@ -12,20 +15,29 @@ const T = {
     off: "Covermood ist für diesen Raum aus – die Lichter bleiben unberührt.",
     nocover: "Noch kein Cover. Starte Musik in diesem Raum – sobald ein Titel ein Cover hat, erscheint es hier und wechselt mit jedem Titel.",
     norooms: "Es ist noch kein Raum eingerichtet.",
-    hint: "Ziehe jedes Rechteck auf die Stelle, deren Farbe das Licht bekommen soll; das Quadrat unten rechts ändert die Größe. Ersatzpunkte (gestrichelt) greifen, wenn der Hauptpunkt gerade schwarz ist.",
-    needpoints: "Für freie Stellen im Cover wähle bei „Farben aus dem Cover“ die Option „Eigene Punkte“.",
-    bulbs: "Vorschau: so leuchten die Leuchtmittel im Raum",
-    lights: "Lichter und Stellen im Cover",
+    hint: "Ziehe ein Rechteck auf die Stelle, deren Farbe das Licht bekommen soll; die Ecke unten rechts ändert die Größe.",
+    needpoints: "Für freie Stellen im Cover wähle unter „Punkte“ die Option „Eigene Punkte“.",
+    wall: "So leuchtet der Raum",
+    tabs: { spots: "Punkte", color: "Farbe", motion: "Bewegung", rules: "Regeln", presets: "Vorlagen" },
     source: "Farben aus dem Cover",
     sources: { palette: "Automatisch", zones: "Zonen", regions: "Eigene Punkte" },
     points: "Anzahl Farben",
     main: "Hauptpunkt",
     alt: "Ersatzpunkt",
-    addalt: "+ Ersatzpunkt",
+    target: "Ziel der Bewegung",
+    addalt: "Ersatzpunkt",
+    addpath: "Bewegung",
     del: "Entfernen",
+    altHint: "Ersatzpunkte (gestrichelt) greifen, wenn der Hauptpunkt gerade schwarz ist.",
+    pathHint: "Mit „Bewegung“ pendelt der Hauptpunkt langsam zu einem zweiten Punkt und zurück.",
     fallback: "Alle Punkte zu dunkel – nimmt eine prägende Farbe des Covers.",
     nocolor: "Cover ganz dunkel – das Licht bleibt, wie es ist.",
-    color: "Farbe",
+    album: "Nur für dieses Album",
+    albumHint: "Die Punkte gelten dann nur, wenn dieses Album läuft. Alle anderen behalten die Punkte des Raums.",
+    tune: "Leuchtmittel abgleichen",
+    tuneHue: "Farbton",
+    tuneSat: "Sättigung",
+    tuneHint: "Zeigt diese Lampe Farben anders als die anderen, gleichst du sie hier an. Wirkt nur auf die echte Lampe.",
     style: "Stil",
     styles: { vibrant: "Lebendig", pastel: "Pastell", faithful: "Originalgetreu", intense: "Intensiv" },
     styleHints: {
@@ -40,15 +52,15 @@ const T = {
     bri: "Helligkeit",
     brimax: "Höchste Helligkeit",
     brimin: "Mindesthelligkeit",
-    motion: "Bewegung",
     mode: "Stimmung",
     modes: { calm: "Ruhig", static: "Statisch", party: "Party" },
     fade: "Überblendzeit bei neuem Cover",
     every: "Farben wandern alle",
     still: "stehen still",
-    drift: "Eigene Punkte wandern lassen",
-    driftHint: "Jede Lampe läuft dann reihum über die Farben der anderen Lampen. Aus: jede Lampe behält ihre Stelle.",
-    limits: "Wann und wie",
+    drift: "Eigene Punkte reihum wandern lassen",
+    driftHint: "Jede Lampe läuft dann über die Farben der anderen Lampen. Aus: jede Lampe behält ihre Stelle.",
+    period: "Punkte pendeln hin und zurück in",
+    periodHint: "Gilt für Lichter mit „Bewegung“. Die Lampen bekommen alle 3 Sekunden einen weichen Schritt.",
     onlySources: "Nur bei diesen Quellen",
     anySource: "Jede Quelle",
     onlyWhile: "Nur solange diese Entität an ist",
@@ -56,11 +68,16 @@ const T = {
     turnOn: "Ausgeschaltete Lichter beim Start einschalten",
     restore: "Lichter danach zurücksetzen",
     defColor: "Standardfarbe am Ende (statt Zurücksetzen)",
+    presetsHint: "Eine Vorlage hält Stil, Helligkeit, Stimmung und Tempo fest. Abrufen kannst du sie hier oder in Automationen mit der Aktion „Covermood: Aussehen anwenden“.",
+    presetName: "Name der Vorlage",
+    presetSave: "Aktuelles Aussehen speichern",
+    presetApply: "Anwenden",
+    nopresets: "Noch keine Vorlage.",
     test: "Auf Lichtern testen",
     testing: "Test läuft – die Lichter kehren gleich zurück.",
-    reset: "Streifen wiederherstellen",
+    reset: "Punkte zurücksetzen",
     saving: "Speichert …",
-    saved: "Gespeichert ✓",
+    saved: "Gespeichert",
     fail: "Fehler",
   },
   en: {
@@ -70,20 +87,29 @@ const T = {
     off: "Covermood is off for this room – the lights are left alone.",
     nocover: "No cover yet. Play music in this room – once a track has cover art it shows up here and changes with every track.",
     norooms: "No room is set up yet.",
-    hint: "Drag each rectangle to the spot whose color the light should get; the square at the bottom right resizes it. Backup spots (dashed) take over when the main spot is currently black.",
-    needpoints: "To pick spots on the cover, choose “Own points” under “Colors from the cover”.",
-    bulbs: "Preview: how the bulbs glow in the room",
-    lights: "Lights and spots on the cover",
+    hint: "Drag a rectangle to the spot whose color the light should get; the corner at the bottom right resizes it.",
+    needpoints: "To pick spots on the cover, choose “Own points” under “Spots”.",
+    wall: "How the room glows",
+    tabs: { spots: "Spots", color: "Color", motion: "Motion", rules: "Rules", presets: "Presets" },
     source: "Colors from the cover",
     sources: { palette: "Automatic", zones: "Zones", regions: "Own points" },
     points: "Number of colors",
     main: "Main spot",
     alt: "Backup spot",
-    addalt: "+ Backup spot",
+    target: "Target of the motion",
+    addalt: "Backup spot",
+    addpath: "Motion",
     del: "Remove",
+    altHint: "Backup spots (dashed) take over when the main spot is currently black.",
+    pathHint: "With “Motion” the main spot slowly swings to a second spot and back.",
     fallback: "All spots too dark – uses a dominant color of the cover.",
     nocolor: "Cover is entirely dark – the light stays as it is.",
-    color: "Color",
+    album: "Only for this album",
+    albumHint: "The spots then apply only while this album plays. All others keep the room's spots.",
+    tune: "Match this bulb",
+    tuneHue: "Hue",
+    tuneSat: "Saturation",
+    tuneHint: "If this lamp shows colors differently from the others, adjust it here. Only affects the real lamp.",
     style: "Style",
     styles: { vibrant: "Vibrant", pastel: "Pastel", faithful: "Faithful", intense: "Intense" },
     styleHints: {
@@ -98,15 +124,15 @@ const T = {
     bri: "Brightness",
     brimax: "Maximum brightness",
     brimin: "Minimum brightness",
-    motion: "Motion",
     mode: "Mood",
     modes: { calm: "Calm", static: "Static", party: "Party" },
     fade: "Fade time on a new cover",
     every: "Colors drift every",
     still: "stand still",
-    drift: "Let own points drift",
-    driftHint: "Each lamp then moves around through the colors of the other lamps. Off: each lamp keeps its spot.",
-    limits: "When and how",
+    drift: "Let own points drift around the lamps",
+    driftHint: "Each lamp then runs through the colors of the other lamps. Off: each lamp keeps its spot.",
+    period: "Spots swing there and back in",
+    periodHint: "Applies to lights with “Motion”. The lamps get a soft step every 3 seconds.",
     onlySources: "Only for these sources",
     anySource: "Any source",
     onlyWhile: "Only while this entity is on",
@@ -114,17 +140,26 @@ const T = {
     turnOn: "Switch on lights that are off when music starts",
     restore: "Restore the lights afterwards",
     defColor: "Default color at the end (instead of restoring)",
+    presetsHint: "A preset keeps style, brightness, mood and speed. Recall it here or in automations with the action “Covermood: Apply look”.",
+    presetName: "Preset name",
+    presetSave: "Save the current look",
+    presetApply: "Apply",
+    nopresets: "No preset yet.",
     test: "Test on lights",
     testing: "Test running – the lights return shortly.",
-    reset: "Restore stripes",
+    reset: "Reset spots",
     saving: "Saving …",
-    saved: "Saved ✓",
+    saved: "Saved",
     fail: "Error",
   },
 };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const clone = (v) => structuredClone(v);
 const lightColor = (l) => `hsl(${HUES[l % HUES.length]} 90% 60%)`;
+const mix = (a, b, f) => (!a ? b : !b ? a : `color-mix(in srgb, ${a} ${Math.round((1 - f) * 100)}%, ${b})`);
+const rectStyle = ([x, y, w, h]) => `left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%`;
+const center = ([x, y, w, h]) => [x + w / 2, y + h / 2];
 const hsToHex = (h, s) => {
   const f = (n) => {
     const k = (n + h / 60) % 6;
@@ -143,22 +178,26 @@ class CovermoodPanel extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
-    this._data = null; // { rooms, modes, max_spots }
+    this._data = null; // { rooms, modes, max_spots, preset_keys }
     this._i = 0;
     this._s = null; // Einstellungen des gewählten Raums (Arbeitskopie)
+    this._roomSpots = null; // { regions, paths } des Raums – die Arbeitskopie kann stattdessen die eines Albums sein
+    this._albumOn = false; // gelten die Punkte der Arbeitskopie nur für das laufende Album?
+    this._album = undefined; // Album, auf das die Arbeitskopie zuletzt abgestimmt wurde
     this._sel = 0; // gewähltes Licht
+    this._tab = "spots";
+    this._tuneOpen = new Set(); // Lichter, deren Abgleich aufgeklappt ist
     this._image = null;
     this._now = {};
     this._enabled = true; // ist Covermood für den gewählten Raum an?
     this._res = [];
     this._unsub = null;
     this._token = 0;
+    this._drift = 0; // wie weit die wandernden Farben in der Vorschau schon gezogen sind (Anteil des Rings)
     this.shadowRoot.addEventListener("input", (e) => this._onInput(e));
     this.shadowRoot.addEventListener("change", (e) => this._onInput(e, true));
     this.shadowRoot.addEventListener("click", (e) => this._onClick(e));
     this.shadowRoot.addEventListener("pointerdown", (e) => this._onDown(e));
-    this._open = { lights: true, color: true, motion: true, limits: false }; // welche Abschnitte aufgeklappt sind
-    this.shadowRoot.addEventListener("toggle", (e) => (this._open[e.target.dataset.sec] = e.target.open), true);
   }
 
   // Home Assistant setzt diese Eigenschaften; gebraucht wird hass
@@ -173,9 +212,12 @@ class CovermoodPanel extends HTMLElement {
 
   connectedCallback() {
     if (this._data && !this._unsub) this._subscribe();
+    this._play();
   }
   disconnectedCallback() {
     this._unsubscribe();
+    cancelAnimationFrame(this._frame);
+    this._frame = null;
   }
 
   get t() {
@@ -183,6 +225,9 @@ class CovermoodPanel extends HTMLElement {
   }
   get room() {
     return this._data?.rooms[this._i];
+  }
+  get _own() {
+    return this._s.source === "regions";
   }
 
   async _load() {
@@ -196,20 +241,23 @@ class CovermoodPanel extends HTMLElement {
     this._image = null;
     this._now = {};
     this._res = [];
+    this._album = undefined;
+    this._albumOn = false;
     this._unsubscribe();
     const room = this.room;
-    this._s = room ? structuredClone(room.settings) : null;
+    this._s = room ? clone(room.settings) : null;
     this._enabled = room?.enabled ?? true;
     if (this._s) {
       const m = this._data.modes[this._s.mode];
       this._s.fade ??= m.fade; // die Stimmung liefert, was nicht überschrieben ist
       this._s.every ??= m.every;
+      this._roomSpots = { regions: clone(this._s.regions), paths: clone(this._s.paths) };
     }
     this._draw();
     if (room) await this._subscribe();
   }
 
-  // --- Live: Cover und Titel ---
+  // --- Live: Cover, Titel, Album ---
 
   async _subscribe() {
     const room = this.room;
@@ -230,15 +278,31 @@ class CovermoodPanel extends HTMLElement {
   }
 
   _onEvent(ev) {
+    if (ev.gone) return void setTimeout(() => this._load(), 3000); // Integration lädt neu: den neuen Raum holen
     this._now = ev;
     if ("enabled" in ev) this._enabled = ev.enabled;
+    let redraw = false;
+    if ((ev.album ?? null) !== this._album) {
+      // Anderes Album: seine eigenen Punkte übernehmen – oder die des Raums, wenn es keine hat
+      this._album = ev.album ?? null;
+      this._albumOn = !!ev.album_spots;
+      const own = ev.album_spots;
+      this._s.regions = clone(own ? { ...this._roomSpots.regions, ...own.regions } : this._roomSpots.regions);
+      this._s.paths = clone(own ? own.paths || {} : this._roomSpots.paths);
+      redraw = true;
+    }
     if ("image" in ev && ev.image !== this._image) {
       const hadImage = !!this._image;
       this._image = ev.image;
-      const img = this.shadowRoot.querySelector("#stage img");
-      if (hadImage && ev.image && img) img.src = ev.image;
-      else this._draw();
-      this._preview();
+      if (hadImage && ev.image && !redraw) {
+        this.shadowRoot.querySelector("#stage img").src = ev.image;
+        this.shadowRoot.querySelector(".ambient").style.backgroundImage = `url(${ev.image})`;
+      } else redraw = true;
+      this._previewSoon();
+    }
+    if (redraw) {
+      this._draw();
+      this._previewSoon();
     }
     this._paintNow();
   }
@@ -262,20 +326,22 @@ class CovermoodPanel extends HTMLElement {
     const t = this.t;
     const rooms = this._data?.rooms || [];
     const room = this.room;
-    const s = this._s;
     if (!room) {
       this.shadowRoot.innerHTML = `<style>${CSS}</style><div class="wrap"><p class="hint">${t.norooms}</p></div>`;
       return;
     }
-    const regions = s.source === "regions";
     const stage = this._image
-      ? `<div class="stage" id="stage"><img src="${this._image}" draggable="false">${regions ? this._boxes() : ""}</div>
-         <div class="room" title="${t.bulbs}">${room.lights
-           .map((_, l) => `<b class="bulb" data-bulb="${l}" data-n="${l + 1}"></b>`)
+      ? `<div class="stage" id="stage"><img src="${this._image}" draggable="false" alt="">${this._own ? this._boxes() : ""}</div>
+         <div class="wall" aria-label="${t.wall}">${room.lights
+           .map(
+             (light, l) => `<div class="lamp" data-lamp="${l}"><i class="cone"></i><i class="bulb"></i>
+               <span>${l + 1} · ${esc(light.name)}</span></div>`,
+           )
            .join("")}</div>
-         <p class="hint">${regions ? t.hint : t.needpoints}</p>`
+         <p class="hint">${this._own ? t.hint : t.needpoints}</p>`
       : `<div class="stage"><div class="empty">${t.nocover}</div></div>`;
     this.shadowRoot.innerHTML = `<style>${CSS}</style>
+      <div class="ambient"${this._image ? ` style="background-image:url(${this._image})"` : ""}></div>
       <div class="wrap">
         <header>
           <h1>Covermood</h1>
@@ -289,10 +355,13 @@ class CovermoodPanel extends HTMLElement {
         <div class="grid">
           <section class="main">${stage}</section>
           <aside class="side">
-            ${this._secLights()}${this._secColor()}${this._secMotion()}${this._secLimits()}
+            <nav class="tabs" role="tablist">${TABS.map(
+              (tab) => `<button type="button" role="tab" data-tab="${tab}" aria-selected="${tab === this._tab}">${t.tabs[tab]}</button>`,
+            ).join("")}</nav>
+            <div class="panel" role="tabpanel">${this[`_tab_${this._tab}`]()}</div>
             <div class="actions">
-              <button id="test"${this._image ? "" : " disabled"}>${t.test}</button>
-              ${regions ? `<button id="reset" class="plain">${t.reset}</button>` : ""}
+              <button type="button" id="test"${this._image ? "" : " disabled"}>${t.test}</button>
+              ${this._own && this._tab === "spots" ? `<button type="button" id="reset" class="plain">${t.reset}</button>` : ""}
             </div>
           </aside>
         </div>
@@ -318,96 +387,136 @@ class CovermoodPanel extends HTMLElement {
 
   _fmt(k, v) {
     if (k === "every") return v === 0 ? this.t.still : v >= 60 ? `${Math.round(v / 6) / 10} min` : `${v} s`;
+    if (k === "path_period") return v >= 60 ? `${Math.round(v / 6) / 10} min` : `${v} s`;
     if (k === "fade") return `${v} s`;
     if (k === "points") return String(v);
     return `${v} %`;
   }
 
-  _secLights() {
+  _tab_spots() {
     const t = this.t, s = this._s, room = this.room;
-    const cards = s.source === "regions"
-      ? room.lights
-          .map((light, l) => {
-            const spots = s.regions[light.entity_id];
-            return `<div class="card${l === this._sel ? " sel" : ""}" data-l="${l}" style="--c:${lightColor(l)}">
-              <div class="head"><b class="chip" data-chip="${l}"></b><span>${l + 1} · ${esc(light.name)}</span><small data-bri="${l}"></small></div>
-              <ul class="spots">${spots
-                .map(
-                  (_, k) => `<li class="spot"><span>${k ? `${t.alt} ${k}` : t.main}</span>
-                    <em data-used="${l}-${k}">✓</em>
-                    <button type="button" class="x" data-del="${l}-${k}" title="${t.del}" aria-label="${t.del}"${spots.length < 2 ? " disabled" : ""}>×</button></li>`,
-                )
-                .join("")}</ul>
-              <button type="button" class="plain add" data-add="${l}"${spots.length >= this._data.max_spots ? " disabled" : ""}>${t.addalt}</button>
-              <p class="note" data-note="${l}"></p>
-            </div>`;
-          })
-          .join("")
-      : `<ul class="plainlist">${room.lights
+    const head = `<div class="field"><span>${t.source}</span>${this._seg("source", t.sources, s.source)}</div>`;
+    if (!this._own)
+      return `${head}${this._slider("points", t.points, 2, 12, 1)}
+        <ul class="plainlist">${room.lights
           .map((light, l) => `<li><b class="chip" data-chip="${l}"></b>${l + 1} · ${esc(light.name)}<small data-bri="${l}"></small></li>`)
           .join("")}</ul>`;
-    return `<details data-sec="lights"${this._open.lights ? " open" : ""}><summary>${t.lights}</summary>
-      <div class="field"><span>${t.source}</span>${this._seg("source", t.sources, s.source)}</div>
-      ${s.source === "regions" ? "" : this._slider("points", t.points, 2, 12, 1)}
-      ${cards}</details>`;
+    const cards = room.lights
+      .map((light, l) => {
+        const spots = s.regions[light.entity_id];
+        const path = s.paths[light.entity_id];
+        const [hue, sat] = s.calibration[light.entity_id] || [0, 100];
+        const row = (label, used, del, canDel = true) => `<li class="spot"><span>${label}</span>${used}
+          <button type="button" class="x" data-del="${del}" title="${t.del}" aria-label="${t.del}: ${label}"${canDel ? "" : " disabled"}>×</button></li>`;
+        return `<div class="card${l === this._sel ? " sel" : ""}" data-l="${l}" style="--c:${lightColor(l)}">
+          <div class="head"><b class="chip" data-chip="${l}"></b><span>${l + 1} · ${esc(light.name)}</span><small data-bri="${l}"></small></div>
+          <ul class="spots">${spots
+            .map((_, k) => row(k ? `${t.alt} ${k}` : t.main, `<em data-used="${l}-${k}">✓</em>`, `${l}-${k}`, spots.length > 1))
+            .join("")}${path ? row(t.target, "", `${l}-to`) : ""}</ul>
+          <div class="cardbtns">
+            <button type="button" class="ghostbtn" data-add="${l}"${spots.length >= this._data.max_spots ? " disabled" : ""}>+ ${t.addalt}</button>
+            ${path ? "" : `<button type="button" class="ghostbtn" data-path="${l}">+ ${t.addpath}</button>`}
+            <button type="button" class="ghostbtn" data-tune="${l}" aria-expanded="${this._tuneOpen.has(l)}">${t.tune}</button>
+          </div>
+          ${
+            this._tuneOpen.has(l)
+              ? `<div class="tune">
+                  <label class="sl"><span>${t.tuneHue}<b data-cv="${l}-0">${hue > 0 ? "+" : ""}${hue}°</b></span>
+                    <input type="range" data-cal="${l}-0" min="-30" max="30" step="1" value="${hue}"></label>
+                  <label class="sl"><span>${t.tuneSat}<b data-cv="${l}-1">${sat} %</b></span>
+                    <input type="range" data-cal="${l}-1" min="50" max="150" step="1" value="${sat}"></label>
+                  <small>${t.tuneHint}</small></div>`
+              : ""
+          }
+          <p class="note" data-note="${l}"></p>
+        </div>`;
+      })
+      .join("");
+    const album = this._now.album
+      ? `<label class="ck"><input type="checkbox" id="album"${this._albumOn ? " checked" : ""}> ${t.album}: <b>${esc(this._now.album)}</b></label>
+         <small class="note">${t.albumHint}</small>`
+      : "";
+    return `${head}${album}${cards}<small class="note">${t.altHint} ${t.pathHint}</small>`;
   }
 
-  _secColor() {
+  _tab_color() {
     const t = this.t, s = this._s;
-    return `<details data-sec="color"${this._open.color ? " open" : ""}><summary>${t.color}</summary>
-      <div class="field"><span>${t.style}</span>${this._seg("style", t.styles, s.style)}<small>${t.styleHints[s.style]}</small></div>
+    return `<div class="field"><span>${t.style}</span>${this._seg("style", t.styles, s.style)}<small>${t.styleHints[s.style]}</small></div>
       ${this._slider("min_sat", t.minsat, 0, 100, 1)}
       <div class="field"><span>${t.brimode}</span>${this._seg("bri_mode", t.brimodes, s.bri_mode)}</div>
       ${s.bri_mode === "keep" ? "" : this._slider("brightness", s.bri_mode === "cover" ? t.brimax : t.bri, 1, 100, 1)}
-      ${s.bri_mode === "cover" ? this._slider("min_bri", t.brimin, 1, 100, 1) : ""}</details>`;
+      ${s.bri_mode === "cover" ? this._slider("min_bri", t.brimin, 1, 100, 1) : ""}`;
   }
 
-  _secMotion() {
+  _tab_motion() {
     const t = this.t, s = this._s;
-    const own = s.source === "regions";
-    const still = own && !s.drift_points; // eigene Punkte stehen fest, solange sie nicht wandern dürfen
-    return `<details data-sec="motion"${this._open.motion ? " open" : ""}><summary>${t.motion}</summary>
-      <div class="field"><span>${t.mode}</span>${this._seg("mode", t.modes, s.mode)}</div>
+    const still = this._own && !s.drift_points; // eigene Punkte stehen fest, solange sie nicht wandern dürfen
+    const moving = this._own && Object.keys(s.paths).length > 0;
+    return `<div class="field"><span>${t.mode}</span>${this._seg("mode", t.modes, s.mode)}</div>
       ${this._slider("fade", t.fade, 0, 30, 0.5)}
-      ${own ? `${this._check("drift_points", t.drift)}<small class="note">${t.driftHint}</small>` : ""}
-      ${this._slider("every", t.every, 0, 120, 1, still)}</details>`;
+      ${this._own ? `${this._check("drift_points", t.drift)}<small class="note">${t.driftHint}</small>` : ""}
+      ${this._slider("every", t.every, 0, 120, 1, still)}
+      ${this._slider("path_period", t.period, 10, 300, 5, !moving)}
+      <small class="note">${moving ? t.periodHint : t.pathHint}</small>`;
   }
 
-  _secLimits() {
+  _tab_rules() {
     const t = this.t, s = this._s, room = this.room;
     const names = [...new Set([...room.sources, ...s.only_sources])];
     const entities = Object.keys(this._hass?.states || {})
       .filter((id) => GATE_DOMAINS.includes(id.split(".")[0]))
       .sort();
-    return `<details data-sec="limits"${this._open.limits ? " open" : ""}><summary>${t.limits}</summary>
-      <div class="field"><span>${t.onlySources}</span>${
-        names.length
-          ? names
-              .map((n) => `<label class="ck"><input type="checkbox" data-src="${esc(n)}"${s.only_sources.includes(n) ? " checked" : ""}> ${esc(n)}</label>`)
-              .join("")
-          : `<small>${t.anySource}</small>`
-      }</div>
+    return `<div class="field"><span>${t.onlySources}</span>${
+      names.length
+        ? names
+            .map((n) => `<label class="ck"><input type="checkbox" data-src="${esc(n)}"${s.only_sources.includes(n) ? " checked" : ""}> ${esc(n)}</label>`)
+            .join("")
+        : `<small>${t.anySource}</small>`
+    }</div>
       <label class="field"><span>${t.onlyWhile}</span>
         <input type="text" list="gate" data-k="only_while" data-t="e" value="${esc(s.only_while || "")}" placeholder="${t.onlyWhilePh}">
         <datalist id="gate">${entities.map((id) => `<option value="${id}">${esc(this._hass.states[id].attributes.friendly_name || "")}</option>`).join("")}</datalist></label>
       ${this._check("turn_on", t.turnOn)}${this._check("restore", t.restore)}
       <label class="ck"><input type="checkbox" data-k="default_on" data-t="b"${s.default_color ? " checked" : ""}> ${t.defColor}</label>
-      ${s.default_color ? `<input type="color" data-k="default_color" data-t="c" value="${hsToHex(...s.default_color)}">` : ""}</details>`;
+      ${s.default_color ? `<input type="color" data-k="default_color" data-t="c" value="${hsToHex(...s.default_color)}">` : ""}`;
+  }
+
+  _tab_presets() {
+    const t = this.t, names = Object.keys(this._s.presets);
+    return `<small class="note">${t.presetsHint}</small>
+      ${
+        names.length
+          ? `<ul class="presets">${names
+              .map(
+                (n) => `<li><span>${esc(n)}</span>
+                  <button type="button" class="ghostbtn" data-preset="${esc(n)}">${t.presetApply}</button>
+                  <button type="button" class="x" data-unpreset="${esc(n)}" title="${t.del}" aria-label="${t.del}: ${esc(n)}">×</button></li>`,
+              )
+              .join("")}</ul>`
+          : `<p class="note">${t.nopresets}</p>`
+      }
+      <div class="newpreset">
+        <input type="text" id="presetname" maxlength="40" placeholder="${t.presetName}" aria-label="${t.presetName}">
+        <button type="button" id="presetsave">${t.presetSave}</button>
+      </div>`;
   }
 
   _boxes() {
-    return this.room.lights
-      .flatMap((light, l) =>
-        this._s.regions[light.entity_id].map(
-          (r, k) => `<div class="box${k ? " alt" : ""}${l === this._sel ? " sel" : ""}" data-l="${l}" data-k="${k}" style="--c:${lightColor(l)};${this._rectStyle(r)}">
-            <span>${l + 1}${k ? "abcdefgh"[k - 1] : ""}</span><i class="grip"></i></div>`,
-        ),
-      )
+    const lights = this.room.lights, s = this._s;
+    const box = (l, k, r, cls, label) => `<div class="box ${cls}${l === this._sel ? " sel" : ""}" data-l="${l}" data-k="${k}" style="--c:${lightColor(l)};${rectStyle(r)}">
+      <span>${label}</span><i class="grip"></i></div>`;
+    const boxes = lights.flatMap((light, l) => [
+      ...s.regions[light.entity_id].map((r, k) => box(l, k, r, k ? "alt" : "", `${l + 1}${k ? "abcdefgh"[k - 1] : ""}`)),
+      ...(s.paths[light.entity_id] ? [box(l, "to", s.paths[light.entity_id], "to", `${l + 1} →`)] : []),
+    ]);
+    // Bahn (Linie) und der Punkt, der in der Vorschau darauf pendelt
+    const lines = lights
+      .map((light, l) => (s.paths[light.entity_id] ? `<line data-line="${l}" style="--c:${lightColor(l)}"/>` : ""))
       .join("");
-  }
-
-  _rectStyle([x, y, w, h]) {
-    return `left:${x * 100}%;top:${y * 100}%;width:${w * 100}%;height:${h * 100}%`;
+    const ghosts = lights
+      .map((light, l) => (s.paths[light.entity_id] ? `<i class="ghost" data-ghost="${l}" style="--c:${lightColor(l)}"></i>` : ""))
+      .join("");
+    return `<svg class="paths" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${lines}</svg>${boxes.join("")}${ghosts}`;
   }
 
   // Ergebnis der Vorschau in die schon gezeichneten Elemente eintragen (ohne neu zu zeichnen)
@@ -415,16 +524,89 @@ class CovermoodPanel extends HTMLElement {
     const $$ = (s) => this.shadowRoot.querySelectorAll(s);
     const t = this.t;
     this._res.forEach((r, l) => {
-      $$(`[data-chip="${l}"]`).forEach((el) => (el.style.background = r.color || "transparent"));
-      $$(`[data-bulb="${l}"]`).forEach((el) => {
-        el.style.setProperty("--c", r.color || "#333");
-        el.style.setProperty("--b", (r.bri ?? 100) / 100);
-      });
       $$(`[data-bri="${l}"]`).forEach((el) => (el.textContent = r.bri == null ? "" : `${r.bri} %`));
       $$(`[data-note="${l}"]`).forEach((el) => (el.textContent = r.used === -1 ? (r.color ? t.fallback : t.nocolor) : ""));
-      $$(`.box[data-l="${l}"]`).forEach((el) => el.classList.toggle("used", +el.dataset.k === r.used));
+      $$(`.box[data-l="${l}"]`).forEach((el) => el.classList.toggle("used", el.dataset.k === "to" || +el.dataset.k === r.used));
       $$(`[data-used^="${l}-"]`).forEach((el) => el.classList.toggle("on", +el.dataset.used.split("-")[1] === r.used));
+      $$(`[data-lamp="${l}"]`).forEach((el) => el.style.setProperty("--b", (r.bri ?? 100) / 100));
     });
+    this.shadowRoot.querySelector(".wall")?.style.setProperty("--fade", `${Math.min(this._s.fade, 8)}s`);
+    this._paintPaths();
+    this._paintColors(this._res.map((r) => r.color));
+    this._play();
+  }
+
+  // Die Farbe je Licht überall dort eintragen, wo sie gezeigt wird: Wand, Chip, Rechtecke
+  _paintColors(colors) {
+    colors.forEach((c, l) => {
+      this.shadowRoot.querySelectorAll(`[data-lamp="${l}"], [data-chip="${l}"], .box[data-l="${l}"]`).forEach((el) => {
+        el.style.setProperty("--m", c || "transparent");
+      });
+    });
+  }
+
+  _paintPaths() {
+    const s = this._s;
+    this.room.lights.forEach((light, l) => {
+      const line = this.shadowRoot.querySelector(`[data-line="${l}"]`);
+      if (!line) return;
+      const [x1, y1] = center(s.regions[light.entity_id][0]), [x2, y2] = center(s.paths[light.entity_id]);
+      Object.entries({ x1, y1, x2, y2 }).forEach(([k, v]) => line.setAttribute(k, v * 100));
+    });
+  }
+
+  // --- Vorschau abspielen: pendelnde Punkte und wandernde Farben ---
+
+  _animated() {
+    if (!this._s || !this._res.length || matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+    const s = this._s;
+    const drifting = s.every > 0 && (!this._own || s.drift_points);
+    return this._res.some((r) => r.track) || drifting;
+  }
+
+  _play() {
+    const on = this._animated();
+    this.shadowRoot.querySelector(".wall")?.classList.toggle("anim", on);
+    if (!on) {
+      cancelAnimationFrame(this._frame);
+      this._frame = null;
+    } else if (!this._frame) this._frame = requestAnimationFrame((ts) => this._step(ts));
+  }
+
+  _step(ts) {
+    this._frame = null;
+    if (!this.isConnected || !this._animated()) return;
+    this._frame = requestAnimationFrame((next) => this._step(next));
+    if (ts - (this._last || 0) < 100) return; // zehn Bilder je Sekunde genügen
+    const dt = Math.min((ts - (this._last || ts)) / 1000, 1);
+    this._last = ts;
+    const s = this._s, lights = this.room.lights;
+    // Wie im Raum: Phase 0 = Start, 0,5 = Ziel; sanft an- und auslaufend
+    const phase = ((ts / 1000) % s.path_period) / s.path_period;
+    const eased = (1 - Math.cos(2 * Math.PI * phase)) / 2;
+    const along = phase < 0.5 ? phase * 2 : 2 - phase * 2; // Stelle in der Liste der Farben entlang der Bahn
+    let colors = this._res.map((r, l) => {
+      if (!r.track) return r.color;
+      const pos = along * (r.track.length - 1), lo = Math.floor(pos);
+      const ghost = this.shadowRoot.querySelector(`[data-ghost="${l}"]`);
+      const path = s.paths[lights[l].entity_id];
+      if (ghost && path) {
+        const [ax, ay] = center(s.regions[lights[l].entity_id][0]), [bx, by] = center(path);
+        ghost.style.left = `${(ax + (bx - ax) * eased) * 100}%`;
+        ghost.style.top = `${(ay + (by - ay) * eased) * 100}%`;
+      }
+      return mix(r.track[lo], r.track[Math.min(lo + 1, r.track.length - 1)], pos - lo);
+    });
+    if (s.every > 0 && (!this._own || s.drift_points)) {
+      this._drift = (this._drift + ((this._data.modes[s.mode].shift || 0.06) * dt) / s.every) % 1;
+      const ring = colors.filter(Boolean);
+      if (ring.length > 1)
+        colors = colors.map((_, l) => {
+          const pos = ((l / colors.length + this._drift) % 1) * ring.length, lo = Math.floor(pos) % ring.length;
+          return mix(ring[lo], ring[(lo + 1) % ring.length], pos - Math.floor(pos));
+        });
+    }
+    this._paintColors(colors);
   }
 
   // --- Bedienung ---
@@ -432,12 +614,25 @@ class CovermoodPanel extends HTMLElement {
   _onClick(e) {
     const b = e.target.closest("button, .card");
     if (!b) return;
-    const { k, v, add, del, l } = b.dataset;
+    const { k, v, add, del, l, tab, path, tune, preset, unpreset } = b.dataset;
     if (b.id === "test") return this._test();
     if (b.id === "reset") return this._resetStripes();
+    if (b.id === "presetsave") return this._savePreset();
+    if (tab) return ((this._tab = tab), this._draw());
     if (k && v !== undefined) return this._set(k, v);
     if (add !== undefined) return this._addSpot(+add);
-    if (del !== undefined) return this._delSpot(...del.split("-").map(Number));
+    if (path !== undefined) return this._addPath(+path);
+    if (del !== undefined) return this._delSpot(...del.split("-"));
+    if (tune !== undefined) {
+      this._tuneOpen.has(+tune) ? this._tuneOpen.delete(+tune) : this._tuneOpen.add(+tune);
+      return this._draw();
+    }
+    if (preset !== undefined) return this._applyPreset(preset);
+    if (unpreset !== undefined) {
+      delete this._s.presets[unpreset];
+      this._draw();
+      return this._changed();
+    }
     if (b.classList.contains("card") && l !== undefined) this._choose(+l);
   }
 
@@ -445,6 +640,8 @@ class CovermoodPanel extends HTMLElement {
     const el = e.target;
     if (el.id === "room") return committed && this._select(+el.value);
     if (el.id === "power") return committed && this._enable(el.checked);
+    if (el.id === "album") return committed && this._setAlbum(el.checked);
+    if (el.dataset.cal !== undefined) return !committed && this._calibrate(el);
     if (el.dataset.src !== undefined) {
       if (!committed) return;
       const rest = this._s.only_sources.filter((n) => n !== el.dataset.src);
@@ -462,9 +659,52 @@ class CovermoodPanel extends HTMLElement {
   // Ändert eine Einstellung; `live` heißt: nur den Wert neben dem Regler nachführen, `keep`: nichts neu zeichnen
   _set(k, value, live = false, keep = false) {
     this._s[k] = value;
-    if (k === "mode") Object.assign(this._s, this._data.modes[value]);
+    if (k === "mode") {
+      const m = this._data.modes[value];
+      Object.assign(this._s, { fade: m.fade, every: m.every });
+    }
     if (live) this.shadowRoot.querySelector(`[data-v="${k}"]`).textContent = this._fmt(k, value);
     else if (!keep && STRUCTURAL.includes(k)) this._draw();
+    this._changed();
+  }
+
+  _calibrate(el) {
+    const [l, i] = el.dataset.cal.split("-").map(Number);
+    const id = this._id(l);
+    const value = [...(this._s.calibration[id] || [0, 100])];
+    value[i] = +el.value;
+    if (value[0] === 0 && value[1] === 100) delete this._s.calibration[id];
+    else this._s.calibration[id] = value;
+    this.shadowRoot.querySelector(`[data-cv="${l}-${i}"]`).textContent = i ? `${value[1]} %` : `${value[0] > 0 ? "+" : ""}${value[0]}°`;
+    this._changed();
+  }
+
+  _setAlbum(on) {
+    this._albumOn = on;
+    if (!on) {
+      // zurück zu den Punkten des Raums
+      this._s.regions = clone(this._roomSpots.regions);
+      this._s.paths = clone(this._roomSpots.paths);
+    }
+    this._draw();
+    this._changed();
+  }
+
+  _savePreset() {
+    const input = this.shadowRoot.querySelector("#presetname");
+    const name = input.value.trim();
+    if (!name) return input.focus();
+    this._s.presets[name] = Object.fromEntries(this._data.preset_keys.map((key) => [key, this._s[key]]));
+    this._draw();
+    this._changed();
+  }
+
+  _applyPreset(name) {
+    Object.assign(this._s, clone(this._s.presets[name]));
+    const m = this._data.modes[this._s.mode];
+    this._s.fade ??= m.fade;
+    this._s.every ??= m.every;
+    this._draw();
     this._changed();
   }
 
@@ -485,21 +725,36 @@ class CovermoodPanel extends HTMLElement {
     this.shadowRoot.querySelectorAll(".card, .box").forEach((el) => el.classList.toggle("sel", +el.dataset.l === l));
   }
 
+  _id(l) {
+    return this.room.lights[l].entity_id;
+  }
+
   _spots(l) {
-    return this._s.regions[this.room.lights[l].entity_id];
+    return this._s.regions[this._id(l)];
   }
 
   _addSpot(l) {
     const spots = this._spots(l);
     const n = spots.length;
     spots.push([clamp(0.3 + 0.12 * n, 0, 0.84), clamp(0.3 + 0.1 * n, 0, 0.84), 0.14, 0.14]);
-    this._sel = l;
-    this._draw();
-    this._changed();
+    this._redrawSpots(l);
+  }
+
+  _addPath(l) {
+    // Ziel so groß wie der Hauptpunkt, auf der anderen Seite des Covers
+    const [x, y, w, h] = this._spots(l)[0];
+    this._s.paths[this._id(l)] = [clamp(1 - x - w, 0, 1 - w), clamp(y < 0.5 ? y + 0.25 : y - 0.25, 0, 1 - h), w, h];
+    this._redrawSpots(l);
   }
 
   _delSpot(l, k) {
-    this._spots(l).splice(k, 1);
+    if (k === "to") delete this._s.paths[this._id(+l)];
+    else this._spots(+l).splice(+k, 1);
+    this._redrawSpots(+l);
+  }
+
+  _redrawSpots(l) {
+    this._sel = l;
     this._draw();
     this._changed();
   }
@@ -507,6 +762,7 @@ class CovermoodPanel extends HTMLElement {
   _resetStripes() {
     const lights = this.room.lights;
     lights.forEach((light, l) => (this._s.regions[light.entity_id] = [[l / lights.length, 0, 1 / lights.length, 1]]));
+    this._s.paths = {};
     this._draw();
     this._changed();
   }
@@ -515,18 +771,20 @@ class CovermoodPanel extends HTMLElement {
     const box = e.target.closest(".box");
     if (!box) return;
     e.preventDefault();
-    const [l, k] = [+box.dataset.l, +box.dataset.k];
+    const l = +box.dataset.l, k = box.dataset.k;
     this._choose(l);
     const stage = this.shadowRoot.querySelector("#stage").getBoundingClientRect();
-    const [x0, y0, w0, h0] = this._spots(l)[k];
+    const put = (r) => (k === "to" ? (this._s.paths[this._id(l)] = r) : (this._spots(l)[+k] = r));
+    const [x0, y0, w0, h0] = k === "to" ? this._s.paths[this._id(l)] : this._spots(l)[+k];
     const size = e.target.classList.contains("grip");
     const move = (ev) => {
       const dx = (ev.clientX - e.clientX) / stage.width, dy = (ev.clientY - e.clientY) / stage.height;
       const r = size
         ? [x0, y0, clamp(w0 + dx, MIN, 1 - x0), clamp(h0 + dy, MIN, 1 - y0)]
         : [clamp(x0 + dx, 0, 1 - w0), clamp(y0 + dy, 0, 1 - h0), w0, h0];
-      this._spots(l)[k] = r;
-      box.style.cssText = `--c:${lightColor(l)};${this._rectStyle(r)}`;
+      put(r);
+      Object.assign(box.style, { left: `${r[0] * 100}%`, top: `${r[1] * 100}%`, width: `${r[2] * 100}%`, height: `${r[3] * 100}%` });
+      this._paintPaths();
       this._previewSoon();
     };
     const up = () => {
@@ -562,8 +820,11 @@ class CovermoodPanel extends HTMLElement {
   }
 
   async _save() {
+    const msg = { type: "covermood/update", room_id: this.room.id, settings: this._s };
+    if (this._now.album) Object.assign(msg, { album: this._albumOn, album_name: this._now.album }); // Punkte gehören dem Album – oder dem Raum
+    if (!this._albumOn) this._roomSpots = { regions: clone(this._s.regions), paths: clone(this._s.paths) };
     try {
-      await this._hass.callWS({ type: "covermood/update", room_id: this.room.id, settings: this._s });
+      await this._hass.callWS(msg);
       this._say(this.t.saved, 2500);
     } catch (err) {
       this._say(`${this.t.fail}: ${err.message || err.code || err}`);
@@ -576,7 +837,10 @@ class CovermoodPanel extends HTMLElement {
     try {
       const { seconds } = await this._hass.callWS({ type: "covermood/test", room_id: this.room.id, settings: this._s });
       this._say(this.t.testing, seconds * 1000);
-      setTimeout(() => (btn.disabled = false), seconds * 1000);
+      setTimeout(() => {
+        const again = this.shadowRoot.querySelector("#test");
+        if (again) again.disabled = false;
+      }, seconds * 1000);
     } catch (err) {
       btn.disabled = false;
       this._say(`${this.t.fail}: ${err.message || err.code || err}`);
@@ -593,79 +857,100 @@ class CovermoodPanel extends HTMLElement {
 }
 
 const CSS = `
-  :host { display: block; min-height: 100%; background: var(--primary-background-color); color: var(--primary-text-color); }
+  :host { display: block; position: relative; min-height: 100%; background: var(--primary-background-color); color: var(--primary-text-color);
+    --line: var(--divider-color); --card: var(--card-background-color); --muted: var(--secondary-text-color); --accent: var(--primary-color); }
   * { box-sizing: border-box; }
-  .wrap { max-width: 1280px; margin: 0 auto; padding: 16px; }
+  /* Das Cover färbt den Hintergrund – weich und nach unten auslaufend */
+  .ambient { position: absolute; inset: 0 0 auto 0; height: 560px; background-size: cover; background-position: center; filter: blur(70px) saturate(1.3);
+    opacity: .28; transform: scale(1.15); pointer-events: none; mask-image: linear-gradient(#000 35%, transparent); -webkit-mask-image: linear-gradient(#000 35%, transparent); }
+  .wrap { position: relative; max-width: 1240px; margin: 0 auto; padding: 16px 16px 32px; }
   header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 16px; }
-  h1 { font-size: 22px; font-weight: 500; margin: 0; }
-  select, input[type=text] { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--divider-color); background: var(--card-background-color); color: inherit; }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
+  select, input[type=text] { font: inherit; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: inherit; }
   input[type=text] { width: 100%; }
   .now { flex: 1 1 240px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .now span, small, .note { color: var(--secondary-text-color); }
-  .dot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: #4caf50; animation: pulse 1.6s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: .35; } }
-  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } .bulb { transition: none; } }
+  .now span, small, .note { color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: #3fa34d; }
   .power { display: flex; align-items: center; gap: 8px; cursor: pointer; }
   .power input { appearance: none; -webkit-appearance: none; position: relative; width: 38px; height: 22px; margin: 0; border-radius: 11px; cursor: pointer;
-    background: var(--divider-color); transition: background .2s; }
+    background: var(--line); transition: background .2s; }
   .power input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
-  .power input:checked { background: var(--primary-color); }
+  .power input:checked { background: var(--accent); }
   .power input:checked::after { transform: translateX(16px); }
-  @media (prefers-reduced-motion: reduce) { .power input, .power input::after { transition: none; } }
-  #msg { color: var(--secondary-text-color); min-height: 1.2em; }
-  .grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr); gap: 24px; align-items: start; }
-  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  #msg { color: var(--muted); min-height: 1.2em; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, 1fr); gap: 24px; align-items: start; }
   .main { position: sticky; top: 8px; }
-  @media (max-width: 900px) { .main { position: static; } }
-  .hint { color: var(--secondary-text-color); line-height: 1.4; margin: 12px 0 0; }
-  .stage { position: relative; line-height: 0; border-radius: 12px; overflow: hidden; background: var(--card-background-color); user-select: none; -webkit-user-select: none; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .main { position: static; } }
+  .hint { color: var(--muted); line-height: 1.45; margin: 12px 0 0; font-size: 14px; }
+
+  .stage { position: relative; line-height: 0; border-radius: 12px; overflow: hidden; background: var(--card); user-select: none; -webkit-user-select: none;
+    box-shadow: 0 8px 28px rgba(0,0,0,.28); }
   .stage img { width: 100%; display: block; pointer-events: none; }
-  .empty { line-height: 1.5; padding: 64px 24px; text-align: center; color: var(--secondary-text-color); }
-  .box { position: absolute; border: 2px solid var(--c); border-radius: 3px; cursor: move; touch-action: none;
-    box-shadow: 0 0 0 1px rgba(0,0,0,.7), inset 0 0 0 1px rgba(0,0,0,.7); transition: background .15s; }
-  .box.alt { border-style: dashed; }
-  .box.sel { background: color-mix(in srgb, var(--c) 18%, transparent); z-index: 1; }
-  .box:not(.used) { opacity: .7; }
-  .box span { position: absolute; left: 3px; top: 3px; font: 600 11px/1.3 system-ui; color: #000; background: var(--c); padding: 0 6px; border-radius: 9px; }
-  .grip { position: absolute; right: -2px; bottom: -2px; width: 14px; height: 14px; background: var(--c); border: 1px solid rgba(0,0,0,.7); cursor: nwse-resize; }
-  .room { display: flex; justify-content: space-around; align-items: center; margin-top: 12px; padding: 36px 12px; border-radius: 12px; background: #0b0b0d; }
-  .bulb { --b: 1; position: relative; width: 34px; height: 34px; border-radius: 50%; background: var(--c, #333); filter: brightness(calc(.35 + .65 * var(--b)));
-    transition: background .4s, filter .4s, box-shadow .4s;
-    box-shadow: 0 0 14px 5px var(--c, #333), 0 0 56px 22px color-mix(in srgb, var(--c, #333) 55%, transparent); }
-  .bulb::after { content: attr(data-n); position: absolute; inset: 0; display: grid; place-items: center; font: 600 12px system-ui; color: rgba(0,0,0,.55); }
-  details { background: var(--card-background-color); border-radius: 12px; padding: 4px 16px; margin-bottom: 12px; }
-  summary { cursor: pointer; font-weight: 500; padding: 12px 0; }
+  .empty { line-height: 1.5; padding: 64px 24px; text-align: center; color: var(--muted); }
+  /* --c: Kennfarbe des Lichts, --m: die Farbe, die an dieser Stelle gemessen wurde */
+  .box { position: absolute; border: 2px solid var(--c); border-radius: 4px; cursor: move; touch-action: none;
+    background: color-mix(in srgb, var(--m, transparent) 30%, transparent); box-shadow: 0 0 0 1px rgba(0,0,0,.65), inset 0 0 0 1px rgba(0,0,0,.45); }
+  .box.alt, .box.to { border-style: dashed; }
+  .box.sel { z-index: 2; box-shadow: 0 0 0 1px rgba(0,0,0,.65), 0 0 0 4px color-mix(in srgb, var(--c) 35%, transparent); }
+  .box:not(.used) { opacity: .6; background: transparent; }
+  .box span { position: absolute; left: 3px; top: 3px; font: 600 11px/1.4 system-ui; color: #000; background: var(--c); padding: 0 6px; border-radius: 9px; white-space: nowrap; }
+  .grip { position: absolute; right: -2px; bottom: -2px; width: 14px; height: 14px; background: var(--c); border: 1px solid rgba(0,0,0,.65); border-radius: 4px 0 2px 0; cursor: nwse-resize; }
+  .paths { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .paths line { stroke: var(--c); stroke-width: 2; stroke-dasharray: 5 5; vector-effect: non-scaling-stroke; }
+  .ghost { position: absolute; z-index: 3; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; background: var(--c); border: 2px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,.6); pointer-events: none; }
+
+  /* Die Wand: jedes Licht wirft einen Kegel, benachbarte mischen sich */
+  .wall { --fade: 2s; display: flex; margin-top: 12px; padding: 0 8px; border-radius: 12px; overflow: hidden; background: #0c0c0f; }
+  .lamp { --b: 1; position: relative; flex: 1; min-width: 0; height: 128px; display: flex; align-items: flex-end; justify-content: center; }
+  .cone { position: absolute; inset: 0 -45% 22px; mix-blend-mode: screen; opacity: calc(.3 + .7 * var(--b));
+    background: radial-gradient(58% 100% at 50% 100%, var(--m, #222) 0%, color-mix(in srgb, var(--m, #222) 35%, transparent) 45%, transparent 78%);
+    transition: opacity var(--fade); }
+  .bulb { position: absolute; bottom: 26px; width: 10px; height: 10px; border-radius: 50%; background: color-mix(in srgb, var(--m, #333) 55%, #fff); }
+  .lamp span { position: relative; padding: 0 4px 6px; max-width: 100%; font-size: 12px; color: #a9a9b2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .side { background: var(--card); border-radius: 12px; padding: 0 16px 16px; }
+  .tabs { display: flex; gap: 4px; margin: 0 -16px 8px; padding: 0 12px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .tabs button { flex: none; padding: 14px 10px 12px; border-radius: 0; background: transparent; color: var(--muted); font-size: 14px; border-bottom: 2px solid transparent; }
+  .tabs button[aria-selected=true] { color: var(--primary-text-color); border-bottom-color: var(--accent); }
   .field { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
-  .field > span, .sl > span { font-size: 13px; color: var(--secondary-text-color); display: flex; justify-content: space-between; }
+  .field > span, .sl > span { font-size: 13px; color: var(--muted); display: flex; justify-content: space-between; gap: 12px; }
   .sl { display: block; padding: 8px 0; }
   .sl.off { opacity: .4; }
-  .sl b { color: var(--primary-text-color); font-weight: 500; }
-  input[type=range] { width: 100%; accent-color: var(--primary-color); }
-  .ck { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
-  .seg { display: flex; flex-wrap: wrap; border: 1px solid var(--divider-color); border-radius: 999px; overflow: hidden; width: fit-content; max-width: 100%; }
+  .sl b { color: var(--primary-text-color); font-weight: 500; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .ck { display: flex; align-items: center; gap: 8px; padding: 6px 0; flex-wrap: wrap; }
+  .seg { display: flex; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; width: fit-content; max-width: 100%; }
   .seg button { border-radius: 0; padding: 7px 14px; background: transparent; color: var(--primary-text-color); font-size: 14px; }
-  .seg button[aria-pressed=true] { background: var(--primary-color); color: var(--text-primary-color, #fff); }
-  .card { border: 1px solid var(--divider-color); border-left: 4px solid var(--c); border-radius: 8px; padding: 8px 12px; margin: 8px 0; cursor: pointer; }
-  .card.sel { background: color-mix(in srgb, var(--c) 10%, transparent); }
+  .seg button[aria-pressed=true] { background: var(--accent); color: var(--text-primary-color, #fff); }
+  .card { border: 1px solid var(--line); border-left: 4px solid var(--c); border-radius: 8px; padding: 10px 12px; margin: 8px 0; cursor: pointer; }
+  .card.sel { background: color-mix(in srgb, var(--c) 9%, transparent); }
   .head { display: flex; align-items: center; gap: 10px; }
   .head span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chip { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--divider-color); flex: none; }
-  .spots { list-style: none; margin: 6px 0 0; padding: 0; }
-  .spot { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 14px; }
-  .spot span { flex: 1; }
-  .spot em { font-style: normal; visibility: hidden; color: #4caf50; }
+  .head small, .plainlist small { font-variant-numeric: tabular-nums; }
+  .chip { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); flex: none; background: var(--m, transparent); }
+  .spots, .presets, .plainlist { list-style: none; margin: 6px 0 0; padding: 0; }
+  .spot, .presets li { display: flex; align-items: center; gap: 8px; padding: 2px 0; font-size: 14px; }
+  .spot span, .presets span { flex: 1; min-width: 0; }
+  .presets li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .spot em { font-style: normal; visibility: hidden; color: #3fa34d; }
   .spot em.on { visibility: visible; }
-  .x { padding: 0 8px; font-size: 18px; line-height: 1.2; background: transparent; color: var(--secondary-text-color); }
-  .add { padding: 4px 8px; font-size: 13px; }
-  .note { font-size: 13px; margin: 4px 0 0; }
+  .x { padding: 0 8px; font-size: 18px; line-height: 1.2; background: transparent; color: var(--muted); }
+  .cardbtns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .ghostbtn { padding: 4px 10px; font-size: 13px; background: transparent; color: var(--accent); border: 1px solid var(--line); border-radius: 8px; }
+  .tune { margin-top: 8px; padding-top: 4px; border-top: 1px solid var(--line); cursor: default; }
+  .note { display: block; font-size: 13px; line-height: 1.45; margin: 4px 0 0; }
   .note:empty { display: none; }
-  .plainlist { list-style: none; margin: 0; padding: 0; }
   .plainlist li { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
-  .actions { display: flex; align-items: center; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
-  button { font: inherit; padding: 10px 20px; border-radius: 999px; border: 0; background: var(--primary-color); color: var(--text-primary-color, #fff); cursor: pointer; }
-  button.plain { background: transparent; color: var(--primary-color); }
+  .plainlist small { margin-left: auto; }
+  .newpreset { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .newpreset input { flex: 1 1 160px; width: auto; }
+  .actions { display: flex; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+  button { font: inherit; padding: 9px 18px; border-radius: 8px; border: 0; background: var(--accent); color: var(--text-primary-color, #fff); cursor: pointer; }
+  button.plain { background: transparent; color: var(--accent); }
   button:disabled { opacity: .4; cursor: default; }
-  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .power input, .power input::after, .cone { transition: none; } }
 `;
 
 // Nach einem Neustart lädt ein offener Tab das Modul ein zweites Mal – dann nicht noch einmal definieren

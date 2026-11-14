@@ -8,14 +8,24 @@
       "room": {
         "title": "Raum",
         "description": "Wähle einen Bereich aus Home Assistant. Medienplayer und Lichter des Bereichs werden im nächsten Schritt vorgeschlagen. Ohne Bereich gib einfach einen Namen ein.",
-        "data": { "area": "Bereich", "name": "Name" },
-        "data_description": { "name": "Leer lassen, um den Namen des Bereichs zu verwenden." }
+        "data": {
+          "area": "Bereich",
+          "name": "Name"
+        },
+        "data_description": {
+          "name": "Leer lassen, um den Namen des Bereichs zu verwenden."
+        }
       },
       "devices": {
         "title": "Player und Lichter",
         "description": "Sobald einer dieser Player spielt, färbt Covermood die Lichter. Bei mehreren Playern gilt der erste, der gerade spielt.",
-        "data": { "players": "Medienplayer", "lights": "Leuchtmittel" },
-        "data_description": { "lights": "Die Reihenfolge der Auswahl ist die Richtung des Farbverlaufs, z. B. von links nach rechts. Es werden nur Lichter angeboten, die Farbe können." }
+        "data": {
+          "players": "Medienplayer",
+          "lights": "Leuchtmittel"
+        },
+        "data_description": {
+          "lights": "Die Reihenfolge der Auswahl ist die Richtung des Farbverlaufs, z. B. von links nach rechts. Es werden nur Lichter angeboten, die Farbe können."
+        }
       },
       "look": {
         "title": "Stimmung",
@@ -44,19 +54,32 @@
   "config_subentries": {
     "room": {
       "entry_type": "Raum",
-      "initiate_flow": { "user": "Raum hinzufügen", "reconfigure": "Raum ändern" },
+      "initiate_flow": {
+        "user": "Raum hinzufügen",
+        "reconfigure": "Raum ändern"
+      },
       "step": {
         "room": {
           "title": "Raum",
           "description": "Wähle einen Bereich aus Home Assistant. Medienplayer und Lichter des Bereichs werden im nächsten Schritt vorgeschlagen. Ohne Bereich gib einfach einen Namen ein.",
-          "data": { "area": "Bereich", "name": "Name" },
-          "data_description": { "name": "Leer lassen, um den Namen des Bereichs zu verwenden." }
+          "data": {
+            "area": "Bereich",
+            "name": "Name"
+          },
+          "data_description": {
+            "name": "Leer lassen, um den Namen des Bereichs zu verwenden."
+          }
         },
         "devices": {
           "title": "Player und Lichter",
           "description": "Sobald einer dieser Player spielt, färbt Covermood die Lichter. Bei mehreren Playern gilt der erste, der gerade spielt.",
-          "data": { "players": "Medienplayer", "lights": "Leuchtmittel" },
-          "data_description": { "lights": "Die Reihenfolge der Auswahl ist die Richtung des Farbverlaufs, z. B. von links nach rechts. Es werden nur Lichter angeboten, die Farbe können." }
+          "data": {
+            "players": "Medienplayer",
+            "lights": "Leuchtmittel"
+          },
+          "data_description": {
+            "lights": "Die Reihenfolge der Auswahl ist die Richtung des Farbverlaufs, z. B. von links nach rechts. Es werden nur Lichter angeboten, die Farbe können."
+          }
         },
         "look": {
           "title": "Stimmung",
@@ -81,7 +104,9 @@
         "no_players": "Wähle mindestens einen Medienplayer.",
         "no_lights": "Wähle mindestens ein Licht."
       },
-      "abort": { "reconfigure_successful": "Raum gespeichert." }
+      "abort": {
+        "reconfigure_successful": "Raum gespeichert."
+      }
     }
   },
   "selector": {
@@ -98,17 +123,65 @@
         "zones": "Bildzonen von links nach rechts",
         "regions": "Eigene Bereiche – pro Licht im Editor „Covermood“ festlegen"
       }
+    },
+    "style": {
+      "options": {
+        "vibrant": "Lebendig",
+        "pastel": "Pastell",
+        "faithful": "Originalgetreu",
+        "intense": "Intensiv"
+      }
     }
   },
   "entity": {
-    "switch": { "enabled": { "name": "Aktiv" } },
+    "switch": {
+      "enabled": {
+        "name": "Aktiv"
+      }
+    },
     "select": {
       "mode": {
         "name": "Stimmung",
-        "state": { "calm": "Ruhig", "static": "Statisch", "party": "Party" }
+        "state": {
+          "calm": "Ruhig",
+          "static": "Statisch",
+          "party": "Party"
+        }
       }
     },
-    "sensor": { "palette": { "name": "Farbpalette" } },
-    "binary_sensor": { "active": { "name": "Färbt Lichter" } }
+    "sensor": {
+      "palette": {
+        "name": "Farbpalette"
+      }
+    },
+    "binary_sensor": {
+      "active": {
+        "name": "Färbt Lichter"
+      }
+    }
+  },
+  "services": {
+    "apply": {
+      "name": "Aussehen anwenden",
+      "description": "Wendet eine gespeicherte Vorlage, einen Farbstil oder eine Stimmung auf einen Raum an – oder auf alle Räume.",
+      "fields": {
+        "room": {
+          "name": "Raum",
+          "description": "Name des Covermood-Raums. Leer lassen für alle Räume."
+        },
+        "preset": {
+          "name": "Vorlage",
+          "description": "Name einer im Editor gespeicherten Vorlage."
+        },
+        "style": {
+          "name": "Stil",
+          "description": "Farbstil."
+        },
+        "mode": {
+          "name": "Stimmung",
+          "description": "Stimmung (Bewegung)."
+        }
+      }
+    }
   }
 }

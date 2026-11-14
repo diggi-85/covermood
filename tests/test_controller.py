@@ -251,3 +251,166 @@ async def test_own_points_can_drift_round_the_lamps(hass):
     assert 0 < a.data["hs_color"][0] < 120 or a.data["hs_color"][0] > 240  # a ist von Rot Richtung Blau gewandert
     assert round(a.data["hs_color"][0]) != 0 and round(b.data["hs_color"][0]) != 240
     await room.async_stop()
+
+
+ROW = [(230, 30, 30, 255)] * 32 + [(30, 30, 230, 255)] * 32  # links rot, rechts blau
+
+
+async def start_with_cover(hass, room, attrs=None):
+    """Raum mit zwei eingeschalteten Lichtern und dem Rot/Blau-Cover starten; liefert die light.turn_on-Aufrufe."""
+    on = async_mock_service(hass, "light", "turn_on")
+    scenes = {svc: async_mock_service(hass, "scene", svc) for svc in ("create", "turn_on", "delete")}
+    hass.states.async_set("light.a", "on", {"brightness": 100, "hs_color": (30.0, 50.0), "color_mode": "hs"})
+    hass.states.async_set("light.b", "on")
+
+    async def load(entity_id):
+        room.pixels, room.thumb = ROW * 64, b"jpg"
+        return True
+
+    with patch.object(room, "_async_load", AsyncMock(side_effect=load)):
+        room.start()
+        hass.states.async_set(PLAYER, "playing", {"entity_picture": "/c1", "media_title": "A"} | (attrs or {}))
+        await hass.async_block_till_done()
+    return on, scenes
+
+
+FIXED = {"source": "regions", "style": "faithful", "min_sat": 0}
+
+
+async def test_a_spot_swings_across_the_cover(hass):
+    # Licht a pendelt von der roten Hälfte in die blaue; Licht b bleibt blau
+    room = make_room(
+        hass,
+        **FIXED,
+        regions={"light.a": [[0, 0, 0.4, 1]], "light.b": [[0.6, 0, 0.4, 1]]},
+        paths={"light.a": [0.6, 0, 0.4, 1]},
+        path_period=12,
+    )
+    on, _ = await start_with_cover(hass, room)
+    assert round(on[0].data["hs_color"][0]) == 0  # Start: rot
+    on.clear()
+    for _ in range(2):  # 2 Schritte à 3 s = halbe Periode → am Ziel
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=3.5))
+        await hass.async_block_till_done()
+    a = [c for c in on if c.data["entity_id"] == "light.a"][-1]
+    assert round(a.data["hs_color"][0]) == 240 and a.data["transition"] == 3
+    await room.async_stop()
+
+
+async def test_preview_carries_the_colours_along_the_path(hass):
+    room = make_room(hass, **FIXED, regions={"light.a": [[0, 0, 0.4, 1]], "light.b": [[0.6, 0, 0.4, 1]]})
+    room.pixels = ROW * 64
+    a, b = room.preview({"paths": {"light.a": [0.6, 0, 0.4, 1]}})
+    assert a["track"][0] == a["color"] and a["track"][0] != a["track"][-1]  # rot → blau
+    assert "track" not in b
+
+
+async def test_calibration_shifts_only_that_bulb(hass):
+    room = make_room(
+        hass, **FIXED, regions={"light.a": [[0, 0, 0.4, 1]], "light.b": [[0, 0, 0.4, 1]]}, calibration={"light.a": [20, 50]}
+    )
+    on, _ = await start_with_cover(hass, room)
+    a, b = on
+    assert round(a.data["hs_color"][0]) == 20 and a.data["hs_color"][1] < b.data["hs_color"][1]
+    assert round(b.data["hs_color"][0]) == 0
+    await room.async_stop()
+
+
+async def test_album_with_its_own_spots(hass):
+    spots = {"regions": {"light.a": [[0.6, 0, 0.4, 1]], "light.b": [[0.6, 0, 0.4, 1]]}, "paths": {}}
+    room = make_room(
+        hass, **FIXED, regions={"light.a": [[0, 0, 0.4, 1]], "light.b": [[0, 0, 0.4, 1]]}, cover_spots={"mj|bad": spots}
+    )
+    on, _ = await start_with_cover(hass, room, {"media_album_name": "Bad", "media_artist": "MJ"})
+    assert [round(c.data["hs_color"][0]) for c in on] == [240, 240]  # die Punkte des Albums, nicht die des Raums
+    assert room.now_playing()["album_spots"] == spots
+    await room.async_stop()
+
+
+async def test_preset_is_applied(hass):
+    room = make_room(hass, presets={"Abend": {"style": "pastel", "mode": "static"}})
+    assert await room.async_apply_preset("Abend") and room.cfg["style"] == "pastel" and room.cfg["mode"] == "static"
+    assert not await room.async_apply_preset("gibt es nicht")
+
+
+class FakeMemory:
+    def __init__(self, data=None):
+        self.data = data or {}
+
+    def get(self, room_id):
+        return self.data.get(room_id)
+
+    def put(self, room_id, lights):
+        self.data[room_id] = lights
+
+    def pop(self, room_id):
+        self.data.pop(room_id, None)
+
+
+async def test_state_before_the_music_survives_a_restart(hass):
+    memory = FakeMemory()
+    room = make_room(hass)
+    room._memory = memory
+    await start_with_cover(hass, room)
+    before = memory.data[room.id]
+    assert before["light.a"] == {"state": "on", "brightness": 100, "hs_color": [30.0, 50.0]}
+
+    # Neustart mitten im Lied: ein neuer Raum findet den gemerkten Zustand und die Musik läuft weiter
+    again = make_room(hass)
+    again.id, again._memory = room.id, memory
+    _, scenes = await start_with_cover(hass, again)
+    assert scenes["create"][-1].data["entities"] == before  # nicht die Cover-Farben, sondern der Zustand davor
+    await again.async_set_enabled(False)
+    assert not memory.data  # sauber beendet: nichts mehr nachzuholen
+    await room.async_stop()
+    await again.async_stop()
+
+
+async def test_leftover_state_is_restored_when_nothing_plays_after_restart(hass):
+    memory = FakeMemory()
+    room = make_room(hass)
+    memory.put(room.id, {"light.a": {"state": "off"}})
+    room._memory = memory
+    create = async_mock_service(hass, "scene", "create")
+    recall = async_mock_service(hass, "scene", "turn_on")
+    async_mock_service(hass, "scene", "delete")
+    room.start()
+    await hass.async_block_till_done()
+
+    # Das Licht ist nach dem Start noch nicht da (z. B. Matter verbindet erst): warten, nichts verwerfen
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=21))
+    await hass.async_block_till_done()
+    assert not create and memory.data
+
+    hass.states.async_set("light.a", "on")
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=42))
+    await hass.async_block_till_done()
+    assert create[0].data["entities"] == {"light.a": {"state": "off"}} and len(recall) == 1
+    assert not memory.data
+    await room.async_stop()
+
+
+async def test_leftover_gets_the_default_colour_instead(hass):
+    memory = FakeMemory()
+    room = make_room(hass, default_color=[30, 80])
+    memory.put(room.id, {"light.a": {"state": "on"}})
+    room._memory = memory
+    on = async_mock_service(hass, "light", "turn_on")
+    hass.states.async_set("light.a", "on")
+    hass.states.async_set("light.b", "off")
+    room.start()
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=21))
+    await hass.async_block_till_done()
+    assert [c.data["hs_color"] for c in on] == [[30.0, 80.0]] and not memory.data
+    await room.async_stop()
+
+
+async def test_two_changes_at_once_both_stick(hass):
+    import asyncio
+
+    room = make_room(hass)
+    await asyncio.gather(
+        room.async_configure({"style": "pastel"}, persist=False), room.async_configure({"min_sat": 5}, persist=False)
+    )
+    assert room.cfg["style"] == "pastel" and room.cfg["min_sat"] == 5

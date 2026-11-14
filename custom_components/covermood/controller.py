@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from typing import Any
@@ -12,7 +13,7 @@ import aiohttp
 from homeassistant.components.media_player import DOMAIN as MEDIA_PLAYER
 from homeassistant.components.media_player import MediaPlayerState
 from homeassistant.config_entries import ConfigSubentry
-from homeassistant.const import ATTR_ENTITY_ID, STATE_ON, STATE_UNAVAILABLE
+from homeassistant.const import ATTR_ENTITY_ID, STATE_ON, STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import CALLBACK_TYPE, Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import (
@@ -27,6 +28,8 @@ from .const import (
     BRI_COVER,
     CONF_BRI_MODE,
     CONF_BRIGHTNESS,
+    CONF_CALIBRATION,
+    CONF_COVER_SPOTS,
     CONF_DEFAULT_COLOR,
     CONF_DRIFT_POINTS,
     CONF_EVERY,
@@ -37,8 +40,11 @@ from .const import (
     CONF_MODE,
     CONF_ONLY_SOURCES,
     CONF_ONLY_WHILE,
+    CONF_PATH_PERIOD,
+    CONF_PATHS,
     CONF_PLAYERS,
     CONF_POINTS,
+    CONF_PRESETS,
     CONF_REGIONS,
     CONF_RESTORE,
     CONF_SOURCE,
@@ -49,15 +55,22 @@ from .const import (
     DEFAULTS,
     DOMAIN,
     GRACE_SECONDS,
+    MAX_COVER_BYTES,
+    MAX_COVER_SPOTS,
+    PATH_FRAMES,
+    PATH_STEP,
+    RESTORE_DELAY,
+    RESTORE_TRIES,
     SOURCE_REGIONS,
     TEST_SECONDS,
 )
+from .memory import Memory
 from .modes import MODES, STYLES, Mode
 
 _LOGGER = logging.getLogger(__name__)
 
 # Ändert sich eines davon, müssen die Farben neu aus dem Cover gemessen werden
-MEASURE_KEYS = (CONF_SOURCE, CONF_POINTS, CONF_REGIONS)
+MEASURE_KEYS = (CONF_SOURCE, CONF_POINTS, CONF_REGIONS, CONF_PATHS, CONF_COVER_SPOTS)
 # Ändert sich eines davon, ist neu zu entscheiden, ob Covermood überhaupt färben soll
 GATE_KEYS = (CONF_ONLY_SOURCES, CONF_ONLY_WHILE)
 
@@ -67,8 +80,9 @@ type Plan = list[tuple[Hs | None, int | None]]  # je Licht: Farbe (None = auslas
 class RoomController:
     """Hört auf die Player eines Raums; spielt einer, färbt er die Lichter nach dem Cover und lässt die Farben wandern."""
 
-    def __init__(self, hass: HomeAssistant, subentry: ConfigSubentry) -> None:
+    def __init__(self, hass: HomeAssistant, subentry: ConfigSubentry, memory: Memory | None = None) -> None:
         self.hass = hass
+        self._memory = memory
         self.id = subentry.subentry_id
         self.name = subentry.title
         self.players: list[str] = list(subentry.data[CONF_PLAYERS])
@@ -94,6 +108,12 @@ class RoomController:
         self._sig: tuple[str, Any, Any] | tuple[()] | None = None  # (Player, Cover, Titel) des laufenden Players
         self._cover: tuple[str, Any] | None = None  # zuletzt ausgewertetes (Player, Cover)
         self._offset = 0.0
+        self._phase = 0.0  # wo die pendelnden Punkte gerade stehen: 0 = Start, 0,5 = Ziel, 1 = wieder Start
+        self.album: str | None = None  # Schlüssel des laufenden Albums (für eigene Punkte je Album)
+        self.album_label: str | None = None
+        self._unsub_leftover: CALLBACK_TYPE | None = None
+        self._leftover_tries = 0
+        self.stopped = False  # dieser Raum ist abgelöst (Neuladen); der Editor soll sich den neuen holen
         self._lock = asyncio.Lock()
         self._unsub_players: CALLBACK_TYPE | None = None
         self._unsub_tick: CALLBACK_TYPE | None = None
@@ -124,19 +144,34 @@ class RoomController:
         """Wandern die Farben? Eigene Punkte gehören fest zu ihrem Licht – außer der Benutzer lässt sie wandern."""
         return self._every(cfg) > 0 and (cfg[CONF_SOURCE] != SOURCE_REGIONS or cfg[CONF_DRIFT_POINTS])
 
-    def rect_lists(self, cfg: dict[str, Any] | None = None) -> list[list[Rect]]:
-        """Bereiche je Licht (Hauptpunkt zuerst); ohne eigene Wahl ein senkrechter Streifen in Lichter-Reihenfolge."""
-        regions = (cfg or self.cfg)[CONF_REGIONS]
+    def spot_cfg(self, cfg: dict[str, Any]) -> dict[str, Any]:
+        """Die Einstellungen, wie sie für das laufende Album gelten: hat es eigene Punkte, ersetzen sie die des Raums."""
+        own = cfg[CONF_COVER_SPOTS].get(self.album) if self.album else None
+        return {**cfg, **own} if own else cfg
+
+    def _moving(self, cfg: dict[str, Any]) -> bool:
+        """Pendelt mindestens ein Punkt über das Cover?"""
+        return cfg[CONF_SOURCE] == SOURCE_REGIONS and any(cfg[CONF_PATHS].get(e) for e in self.lights)
+
+    def rect_lists(self, cfg: dict[str, Any] | None = None, phase: float = 0.0) -> list[list[Rect]]:
+        """Bereiche je Licht (Hauptpunkt zuerst); ohne eigene Wahl ein senkrechter Streifen in Lichter-Reihenfolge.
+        Hat ein Licht eine Bahn, steht sein Hauptpunkt je nach phase zwischen Start und Ziel (sanft an- und auslaufend)."""
+        cfg = cfg or self.cfg
+        regions, paths = cfg[CONF_REGIONS], cfg[CONF_PATHS]
+        t = (1 - math.cos(math.tau * phase)) / 2
         n = len(self.lights)
         out: list[list[Rect]] = []
         for i, entity_id in enumerate(self.lights):
             spots = regions.get(entity_id)
             if not spots:
-                out.append([(i / n, 0.0, 1 / n, 1.0)])
+                rects = [(i / n, 0.0, 1 / n, 1.0)]
             elif isinstance(spots[0], int | float):  # Stand vor den Ersatzpunkten: ein einzelnes Rechteck
-                out.append([tuple(spots)])
+                rects = [tuple(spots)]
             else:
-                out.append([tuple(r) for r in spots])
+                rects = [tuple(r) for r in spots]
+            if target := paths.get(entity_id):
+                rects[0] = tuple(a + (b - a) * t for a, b in zip(rects[0], target, strict=True))
+            out.append(rects)
         return out
 
     def in_sync(self, sub: ConfigSubentry) -> bool:
@@ -152,12 +187,12 @@ class RoomController:
 
     async def async_configure(self, patch: dict[str, Any], persist: bool = True) -> None:
         """Einstellungen ändern – wirkt sofort auf den laufenden Titel, ohne Neuladen."""
-        old = self.cfg
-        new = {**old, **patch}
         async with self._lock:
-            self.cfg = new
+            # Erst unter der Sperre lesen: zwei gleichzeitige Änderungen bauen sonst beide auf dem alten Stand auf
+            old = self.cfg
+            new = self.cfg = {**old, **patch}
             if self.pixels is not None and any(old[k] != new[k] for k in MEASURE_KEYS):
-                self.picks = self._measure(new)
+                self.picks = self._measure_own()
             if self.active and self.palette:
                 await self._async_apply(fade=True)
                 self._schedule_tick()
@@ -184,6 +219,26 @@ class RoomController:
     def start(self) -> None:
         self._track()
         self.hass.async_create_task(self.async_refresh())  # es könnte schon etwas laufen
+        if self._memory and self._memory.get(self.id):  # Neustart mitten im Lied: Zurücksetzen nachholen
+            self._unsub_leftover = async_call_later(self.hass, RESTORE_DELAY, self._restore_leftover)
+
+    async def _restore_leftover(self, _now: datetime) -> None:
+        """Läuft nach dem Neustart keine Musik mehr, bekommen die Lichter ihren Zustand von vor der Musik zurück."""
+        self._unsub_leftover = None
+        async with self._lock:
+            if self.active or not (saved := self._memory.get(self.id)):
+                return  # spielt wieder: _async_begin hat den gemerkten Zustand übernommen
+            missing = [e for e in saved if (st := self.hass.states.get(e)) is None or st.state == STATE_UNAVAILABLE]
+            self._leftover_tries += 1
+            if missing and self._leftover_tries < RESTORE_TRIES:  # z. B. Matter ist noch nicht verbunden: später wieder
+                self._unsub_leftover = async_call_later(self.hass, RESTORE_DELAY, self._restore_leftover)
+                return
+            if default := self.cfg[CONF_DEFAULT_COLOR]:
+                await self._async_paint([(Hs(default[0], default[1] / 100), None)] * len(self.lights), 3, False)
+            elif self.cfg[CONF_RESTORE]:
+                if await self._call("scene", "create", {"scene_id": self._scene, "entities": saved}):
+                    await self._async_restore(self._scene)
+            self._memory.pop(self.id)
 
     def _track(self) -> None:
         if self._unsub_players:
@@ -196,15 +251,32 @@ class RoomController:
             self._unsub_players()
             self._unsub_players = None
         self._cancel_grace()
+        if self._unsub_leftover:
+            self._unsub_leftover()
+            self._unsub_leftover = None
         async with self._lock:
             await self._async_end_test()
+            if self.hass.is_stopping:
+                # Beim Herunterfahren sind die Lichter oft schon nicht mehr erreichbar. Der Zustand vor der Musik
+                # bleibt gemerkt und kommt nach dem Start zurück (siehe _restore_leftover).
+                self._cancel_tick()
+                return
             await self._async_end()
+        self.stopped = True
+        self._notify()
 
     # --- Steuerung von außen (Entitäten) ---
 
     async def async_set_mode(self, key: str) -> None:
         # Die Stimmung bringt ihre eigene Überblend- und Wanderzeit mit
         await self.async_configure({CONF_MODE: key, CONF_FADE: None, CONF_EVERY: None}, persist=False)
+
+    async def async_apply_preset(self, name: str) -> bool:
+        """Eine gespeicherte Vorlage übernehmen; False, wenn der Raum keine dieses Namens hat."""
+        if (preset := self.cfg[CONF_PRESETS].get(name)) is None:
+            return False
+        await self.async_configure(dict(preset))
+        return True
 
     async def async_set_enabled(self, enabled: bool) -> None:
         self.enabled = enabled
@@ -249,7 +321,25 @@ class RoomController:
             "player": st.entity_id if st else None,
             "title": st.attributes.get("media_title") if st else None,
             "artist": st.attributes.get("media_artist") if st else None,
+            "album": self.album_label,
+            "album_spots": self.cfg[CONF_COVER_SPOTS].get(self.album) if self.album else None,
         }
+
+    def _note_album(self, st: State) -> None:
+        """Das laufende Album merken – eigene Punkte können an ihm hängen."""
+        album = st.attributes.get("media_album_name")
+        artist = st.attributes.get("media_album_artist") or st.attributes.get("media_artist") or ""
+        self.album = f"{artist}|{album}".casefold() if album else None
+        self.album_label = album or None
+
+    def set_album_spots(self, spots: dict[str, Any] | None) -> dict[str, Any]:
+        """Eigene Punkte für das laufende Album setzen (None = wieder die des Raums); liefert die neue Sammlung."""
+        store = {k: v for k, v in self.cfg[CONF_COVER_SPOTS].items() if k != self.album}
+        if spots is not None and self.album:
+            store[self.album] = spots
+            while len(store) > MAX_COVER_SPOTS:
+                store.pop(next(iter(store)))
+        return store
 
     @callback
     def _on_player(self, event: Event[EventStateChangedData]) -> None:
@@ -274,11 +364,16 @@ class RoomController:
                 return
             self._cancel_grace()
             changed = False
+            had = self.album
+            if st := self.hass.states.get(sig[0]):
+                self._note_album(st)
+            if self.album != had and self.pixels is not None and self._cover == sig[:2]:
+                self.picks, changed = self._measure_own(), True  # gleiches Bild, anderes Album: dessen Punkte gelten
             if self._cover != sig[:2]:  # anderes Cover → neu auswerten; gleiches Cover bei neuem Titel nicht
                 self._cover = sig[:2]
                 picks = await self._async_measure(sig[0])
                 if any(p.color for p in picks) and picks != self.picks:
-                    self.picks, self._offset, changed = picks, 0.0, True
+                    self.picks, self._offset, self._phase, changed = picks, 0.0, 0.0, True
                     self._notify()
             if not self.palette:  # noch nie ein lesbares Cover: Lichter in Ruhe lassen
                 return
@@ -313,13 +408,17 @@ class RoomController:
             _LOGGER.debug("Cover of %s is not readable", entity_id, exc_info=True)
         return False
 
-    def _measure(self, cfg: dict[str, Any]) -> list[Pick]:
+    def _measure(self, cfg: dict[str, Any], phase: float = 0.0) -> list[Pick]:
         if self.pixels is None:
             return []
-        return analyse(self.pixels, int(cfg[CONF_POINTS]), cfg[CONF_SOURCE], self.rect_lists(cfg))
+        return analyse(self.pixels, int(cfg[CONF_POINTS]), cfg[CONF_SOURCE], self.rect_lists(cfg, phase))
+
+    def _measure_own(self) -> list[Pick]:
+        """Messen, wie es für den laufenden Titel gilt: Punkte des Albums, Stand der pendelnden Punkte."""
+        return self._measure(self.spot_cfg(self.cfg), self._phase)
 
     async def _async_measure(self, entity_id: str) -> list[Pick]:
-        return self._measure(self.cfg) if await self._async_load(entity_id) else []
+        return self._measure_own() if await self._async_load(entity_id) else []
 
     async def async_cover(self) -> bytes | None:
         """Cover für den Editor. Liegt noch keins vor, kommt es vom ersten Player des Raums, der eines hat –
@@ -340,8 +439,9 @@ class RoomController:
         url = (self.hass.states.get(entity_id) or State(entity_id, "")).attributes.get("entity_picture")
         if url and url.startswith("http"):
             async with async_get_clientsession(self.hass).get(url, timeout=aiohttp.ClientTimeout(total=10)) as resp:
-                if resp.status == 200:
-                    return await resp.read()
+                if resp.status == 200 and (resp.content_length or 0) <= MAX_COVER_BYTES:
+                    data = await resp.content.read(MAX_COVER_BYTES + 1)
+                    return data if len(data) <= MAX_COVER_BYTES else None
         return None
 
     # --- Farben → Lichter ---
@@ -379,17 +479,27 @@ class RoomController:
         cfg = {**self.cfg, **patch}
         picks = self._measure(cfg)
         used = [p.used for p in picks] if cfg[CONF_SOURCE] == SOURCE_REGIONS else [0] * len(self.lights)
-        return [
+        out = [
             {"color": to_hex(c) if c else None, "bri": bri, "used": u}
             for (c, bri), u in zip(self._plan(cfg, picks), used, strict=True)
         ]
+        if self._moving(cfg):  # Farben entlang der Bahn (Start → Ziel), damit der Editor die Bewegung abspielen kann
+            still = {**cfg, CONF_DRIFT_POINTS: False}
+            frames = [self._plan(still, self._measure(still, k / (2 * (PATH_FRAMES - 1)))) for k in range(PATH_FRAMES)]
+            for i, entity_id in enumerate(self.lights):
+                if cfg[CONF_PATHS].get(entity_id):
+                    out[i]["track"] = [to_hex(f[i][0]) if f[i][0] else None for f in frames]
+        return out
 
     async def _async_begin(self) -> None:
         await self._async_end_test()  # sonst würde der Schnappschuss die Testfarben festhalten
+        saved = self._memory.get(self.id) if self._memory else None
+        if saved is None and self._memory:
+            self._memory.put(self.id, self._light_states())
         if self.cfg[CONF_RESTORE]:
-            self._snapshotted = await self._call(
-                "scene", "create", {"scene_id": self._scene, "snapshot_entities": self.lights}
-            )
+            # Nach einem Neustart mitten im Lied stehen die Lichter schon in Cover-Farben – dann zählt der gemerkte Zustand
+            what = {"entities": saved} if saved else {"snapshot_entities": self.lights}
+            self._snapshotted = await self._call("scene", "create", {"scene_id": self._scene, **what})
         self.active = True
         self._notify()
 
@@ -403,7 +513,27 @@ class RoomController:
         if self._snapshotted:
             self._snapshotted = False
             await self._async_restore(self._scene, recall=not default)
+        if self._memory:
+            self._memory.pop(self.id)
         self._notify()
+
+    def _light_states(self) -> dict[str, dict[str, Any]]:
+        """Zustand der Lichter in der Form, die scene.create versteht – übersteht einen Neustart."""
+        out: dict[str, dict[str, Any]] = {}
+        for entity_id in self.lights:
+            st = self.hass.states.get(entity_id)
+            if st is None or st.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                continue
+            light: dict[str, Any] = {"state": st.state}
+            if st.state == STATE_ON:
+                if (brightness := st.attributes.get("brightness")) is not None:
+                    light["brightness"] = brightness
+                if st.attributes.get("color_mode") == "color_temp" and st.attributes.get("color_temp_kelvin"):
+                    light["color_temp_kelvin"] = st.attributes["color_temp_kelvin"]
+                elif hs := st.attributes.get("hs_color"):
+                    light["hs_color"] = list(hs)
+            out[entity_id] = light
+        return out
 
     async def _async_restore(self, scene_id: str, recall: bool = True) -> None:
         scene = {ATTR_ENTITY_ID: f"scene.{scene_id}"}
@@ -417,11 +547,16 @@ class RoomController:
         plan = self._plan(cfg, self.picks, self._offset)
         await self._async_paint(plan, self._fade(cfg) if fade else self._every(cfg), switch_on)
 
-    async def _async_paint(self, plan: Plan, transition: float, switch_on: bool) -> None:
+    async def _async_paint(
+        self, plan: Plan, transition: float, switch_on: bool, cfg: dict[str, Any] | None = None
+    ) -> None:
+        calibration = (cfg or self.cfg)[CONF_CALIBRATION]
         for entity_id, (c, bri) in zip(self.lights, plan, strict=True):
             st = self.hass.states.get(entity_id)
             if c is None or st is None or st.state == STATE_UNAVAILABLE:
                 continue
+            if shift := calibration.get(entity_id):  # dieses Leuchtmittel zeigt Farben anders als die anderen
+                c = c._replace(h=(c.h + shift[0]) % 360, s=min(1.0, c.s * shift[1] / 100))
             data: dict[str, Any] = {
                 ATTR_ENTITY_ID: entity_id,
                 "hs_color": [round(c.h, 1), round(c.s * 100, 1)],
@@ -435,12 +570,16 @@ class RoomController:
                 data.setdefault("brightness_pct", self.cfg[CONF_BRIGHTNESS])
             await self._call("light", "turn_on", data, blocking=False)
 
+    def _tick_seconds(self, cfg: dict[str, Any]) -> float:
+        """Abstand der Schritte: pendelnde Punkte brauchen einen engen Takt, wandernde Farben den des Benutzers."""
+        if self._moving(self.spot_cfg(cfg)):
+            return PATH_STEP
+        return self._every(cfg) if self._drifts(cfg) else 0
+
     def _schedule_tick(self) -> None:
         self._cancel_tick()
-        if self.active and self._drifts(self.cfg):
-            self._unsub_tick = async_track_time_interval(
-                self.hass, self._on_tick, timedelta(seconds=self._every(self.cfg))
-            )
+        if self.active and (seconds := self._tick_seconds(self.cfg)):
+            self._unsub_tick = async_track_time_interval(self.hass, self._on_tick, timedelta(seconds=seconds))
 
     def _cancel_tick(self) -> None:
         if self._unsub_tick:
@@ -449,9 +588,20 @@ class RoomController:
 
     async def _on_tick(self, _now: datetime) -> None:
         async with self._lock:
-            if self.active and self.palette:
-                self._offset = (self._offset + self._mode(self.cfg).shift) % 1.0
-                await self._async_apply(fade=False)
+            if not (self.active and self.palette):
+                return
+            cfg = self.cfg
+            step = self._tick_seconds(cfg)
+            if self._moving(self.spot_cfg(cfg)):
+                self._phase = (self._phase + step / cfg[CONF_PATH_PERIOD]) % 1.0
+                # Läuft ein Punkt durch eine schwarze Stelle, behält das Licht seine letzte Farbe
+                self.picks = [
+                    old if new.used == -1 and old.color else new
+                    for old, new in zip(self.picks, self._measure_own(), strict=True)
+                ]
+            if self._drifts(cfg):
+                self._offset = (self._offset + self._mode(cfg).shift * step / self._every(cfg)) % 1.0
+            await self._async_paint(self._plan(cfg, self.picks, self._offset), step, False)
 
     async def async_test(self, patch: dict[str, Any]) -> None:
         """Die Farben dieser (ungespeicherten) Einstellungen kurz auf die echten Lichter legen (Editor); danach kehren
@@ -465,7 +615,7 @@ class RoomController:
                 self._test_snapshot = await self._call(
                     "scene", "create", {"scene_id": self._test_scene, "snapshot_entities": self.lights}
                 )
-            await self._async_paint(plan, 1.0, switch_on=not self.active)
+            await self._async_paint(plan, 1.0, switch_on=not self.active, cfg=cfg)
             self._unsub_test = async_call_later(self.hass, TEST_SECONDS, self._test_over)
 
     async def _test_over(self, _now: datetime) -> None:
